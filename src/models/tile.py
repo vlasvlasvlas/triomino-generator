@@ -1,0 +1,193 @@
+"""
+Triomino Tile Model
+
+Represents a single triangular tile with three vertex values (0-5).
+Handles rotation and edge matching logic.
+"""
+from __future__ import annotations
+from typing import Tuple, List, Optional
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class Edge:
+    """Represents one edge of a triomino with two vertex values."""
+    v1: int
+    v2: int
+    
+    def matches(self, other: Edge) -> bool:
+        """Check if this edge matches another edge (values must match in reverse order)."""
+        return self.v1 == other.v2 and self.v2 == other.v1
+    
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Edge):
+            return False
+        return self.v1 == other.v1 and self.v2 == other.v2
+    
+    def __hash__(self) -> int:
+        return hash((self.v1, self.v2))
+    
+    def __repr__(self) -> str:
+        return f"({self.v1}-{self.v2})"
+
+
+class Triomino:
+    """
+    A triangular tile with three vertex values.
+    
+    Vertex positions (when pointing up ▲):
+        - v0: top vertex
+        - v1: bottom-left vertex  
+        - v2: bottom-right vertex
+    
+    Edge indices:
+        - edge 0: left side (v0 to v1)
+        - edge 1: bottom side (v1 to v2)
+        - edge 2: right side (v2 to v0)
+    
+    Rotation: 0, 1, or 2 steps (each step = 120° clockwise)
+    """
+    
+    def __init__(self, a: int, b: int, c: int):
+        """
+        Create a triomino with values a, b, c.
+        Values are stored in canonical form (clockwise ascending order).
+        """
+        if not all(0 <= v <= 5 for v in (a, b, c)):
+            raise ValueError(f"Values must be 0-5, got {a}, {b}, {c}")
+        
+        # Store base values (immutable)
+        self._base: Tuple[int, int, int] = (a, b, c)
+        self._rotation: int = 0
+    
+    @property
+    def values(self) -> Tuple[int, int, int]:
+        """Get current vertex values after rotation (v0, v1, v2)."""
+        a, b, c = self._base
+        r = self._rotation % 3
+        if r == 0:
+            return (a, b, c)
+        elif r == 1:
+            return (c, a, b)  # 120° clockwise
+        else:  # r == 2
+            return (b, c, a)  # 240° clockwise
+    
+    @property
+    def rotation(self) -> int:
+        """Current rotation state (0, 1, or 2)."""
+        return self._rotation
+    
+    @rotation.setter
+    def rotation(self, value: int) -> None:
+        """Set rotation to a specific value."""
+        self._rotation = value % 3
+    
+    def rotate(self, steps: int = 1) -> Triomino:
+        """Rotate clockwise by given steps. Returns self for chaining."""
+        self._rotation = (self._rotation + steps) % 3
+        return self
+    
+    def copy(self) -> Triomino:
+        """Create a copy of this tile with the same rotation."""
+        t = Triomino(*self._base)
+        t._rotation = self._rotation
+        return t
+    
+    def get_edge(self, edge_index: int) -> Edge:
+        """
+        Get the edge at the given index (0, 1, or 2).
+        
+        For an up-pointing triangle (▲):
+            - edge 0: left side (v0 → v1)
+            - edge 1: bottom side (v1 → v2)
+            - edge 2: right side (v2 → v0)
+        """
+        v0, v1, v2 = self.values
+        if edge_index == 0:
+            return Edge(v0, v1)  # left
+        elif edge_index == 1:
+            return Edge(v1, v2)  # bottom
+        else:  # edge_index == 2
+            return Edge(v2, v0)  # right
+    
+    def get_all_edges(self) -> List[Edge]:
+        """Get all three edges."""
+        return [self.get_edge(i) for i in range(3)]
+    
+    @property
+    def sum_value(self) -> int:
+        """Sum of all three vertex values (score when placed)."""
+        return sum(self._base)
+    
+    def is_triple(self) -> bool:
+        """Check if all three values are the same."""
+        a, b, c = self._base
+        return a == b == c
+    
+    def is_triple_zero(self) -> bool:
+        """Check if this is the 0-0-0 tile."""
+        return self._base == (0, 0, 0)
+    
+    def find_rotation_for_edge_match(self, edge_index: int, target_edge: Edge) -> Optional[int]:
+        """
+        Find a rotation that makes the specified edge match the target.
+        
+        Args:
+            edge_index: Which edge of this tile should match (0, 1, or 2)
+            target_edge: The edge values we need to match against
+            
+        Returns:
+            Rotation value (0, 1, or 2) if match possible, None otherwise
+        """
+        original_rotation = self._rotation
+        for r in range(3):
+            self._rotation = r
+            if self.get_edge(edge_index).matches(target_edge):
+                self._rotation = original_rotation
+                return r
+        self._rotation = original_rotation
+        return None
+    
+    def __eq__(self, other: object) -> bool:
+        """Two tiles are equal if they have the same base values (ignoring rotation)."""
+        if not isinstance(other, Triomino):
+            return False
+        # Compare sorted base values to handle different orderings
+        return sorted(self._base) == sorted(other._base)
+    
+    def __hash__(self) -> int:
+        return hash(tuple(sorted(self._base)))
+    
+    def __repr__(self) -> str:
+        v = self.values
+        base = f"[{v[0]}-{v[1]}-{v[2]}]"
+        if self._rotation != 0:
+            return f"Triomino{base}@r{self._rotation}"
+        return f"Triomino{base}"
+    
+    def __str__(self) -> str:
+        v = self.values
+        return f"{v[0]}-{v[1]}-{v[2]}"
+
+
+@dataclass
+class PlacedTile:
+    """A tile that has been placed on the board at a specific position."""
+    tile: Triomino
+    q: int  # Axial coordinate q
+    r: int  # Axial coordinate r
+    player_id: Optional[int] = None  # Which player placed this tile
+    
+    @property
+    def is_pointing_up(self) -> bool:
+        """Determine triangle orientation based on position parity."""
+        return (self.q + self.r) % 2 == 0
+    
+    def get_edge(self, edge_index: int) -> Edge:
+        """Get edge considering triangle orientation."""
+        return self.tile.get_edge(edge_index)
+    
+    def __repr__(self) -> str:
+        direction = "▲" if self.is_pointing_up else "▼"
+        player = f" P{self.player_id}" if self.player_id is not None else ""
+        return f"Placed({self.tile} at ({self.q},{self.r}){direction}{player})"

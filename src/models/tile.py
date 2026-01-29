@@ -71,6 +71,18 @@ class Triomino:
             return (c, a, b)  # 120° clockwise
         else:  # r == 2
             return (b, c, a)  # 240° clockwise
+
+    def get_values(self, orientation: str = "up") -> Tuple[int, int, int]:
+        """
+        Get oriented vertex values for placement.
+
+        For 'up' orientation, values map directly to (v0, v1, v2).
+        For 'down', the triangle is rotated 180° on the board, which swaps v1/v2.
+        """
+        v0, v1, v2 = self.values
+        if orientation == "down":
+            return (v0, v2, v1)
+        return (v0, v1, v2)
     
     @property
     def rotation(self) -> int:
@@ -93,7 +105,7 @@ class Triomino:
         t._rotation = self._rotation
         return t
     
-    def get_edge(self, edge_index: int) -> Edge:
+    def get_edge(self, edge_index: int, orientation: str = "up") -> Edge:
         """
         Get the edge at the given index (0, 1, or 2).
         
@@ -102,7 +114,7 @@ class Triomino:
             - edge 1: bottom side (v1 → v2)
             - edge 2: right side (v2 → v0)
         """
-        v0, v1, v2 = self.values
+        v0, v1, v2 = self.get_values(orientation)
         if edge_index == 0:
             return Edge(v0, v1)  # left
         elif edge_index == 1:
@@ -110,9 +122,9 @@ class Triomino:
         else:  # edge_index == 2
             return Edge(v2, v0)  # right
     
-    def get_all_edges(self) -> List[Edge]:
-        """Get all three edges."""
-        return [self.get_edge(i) for i in range(3)]
+    def get_all_edges(self, orientation: str = "up") -> List[Edge]:
+        """Get all three edges for a given orientation."""
+        return [self.get_edge(i, orientation) for i in range(3)]
     
     @property
     def sum_value(self) -> int:
@@ -128,7 +140,8 @@ class Triomino:
         """Check if this is the 0-0-0 tile."""
         return self._base == (0, 0, 0)
     
-    def find_rotation_for_edge_match(self, edge_index: int, target_edge: Edge) -> Optional[int]:
+    def find_rotation_for_edge_match(self, edge_index: int, target_edge: Edge,
+                                     orientation: str = "up") -> Optional[int]:
         """
         Find a rotation that makes the specified edge match the target.
         
@@ -142,7 +155,7 @@ class Triomino:
         original_rotation = self._rotation
         for r in range(3):
             self._rotation = r
-            if self.get_edge(edge_index).matches(target_edge):
+            if self.get_edge(edge_index, orientation).matches(target_edge):
                 self._rotation = original_rotation
                 return r
         self._rotation = original_rotation
@@ -174,20 +187,31 @@ class Triomino:
 class PlacedTile:
     """A tile that has been placed on the board at a specific position."""
     tile: Triomino
-    q: int  # Axial coordinate q
-    r: int  # Axial coordinate r
-    player_id: Optional[int] = None  # Which player placed this tile
+    q: int  # Row in new system
+    r: int  # Col in new system
+    player_id: Optional[int] = None
+    orientation: str = 'up'  # 'up' or 'down'
     
     @property
-    def is_pointing_up(self) -> bool:
-        """Determine triangle orientation based on position parity."""
-        return (self.q + self.r) % 2 == 0
+    def row(self) -> int:
+        return self.q
     
+    @property
+    def col(self) -> int:
+        return self.r
+    
+    @property
+    def position(self) -> Tuple[int, int, str]:
+        return (self.q, self.r, self.orientation)
+
+    @property
+    def values(self) -> Tuple[int, int, int]:
+        return self.tile.get_values(self.orientation)
+
     def get_edge(self, edge_index: int) -> Edge:
-        """Get edge considering triangle orientation."""
-        return self.tile.get_edge(edge_index)
+        return self.tile.get_edge(edge_index, self.orientation)
     
     def __repr__(self) -> str:
-        direction = "▲" if self.is_pointing_up else "▼"
+        arrow = "▲" if self.orientation == 'up' else "▼"
         player = f" P{self.player_id}" if self.player_id is not None else ""
-        return f"Placed({self.tile} at ({self.q},{self.r}){direction}{player})"
+        return f"Placed({self.tile} at ({self.q},{self.r}){arrow}{player})"

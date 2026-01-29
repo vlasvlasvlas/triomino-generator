@@ -1,136 +1,133 @@
 # 🎮 Triominó - War Games Edition
 
-Simulador automático de partidas de Triominó donde 2 computadoras juegan entre sí con reglas 100% oficiales y visualización animada estilo "War Games".
-
-![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
+**Simulador automático de partidas de Triominó** donde dos computadoras juegan entre sí siguiendo las reglas oficiales del juego.
 
 ---
 
-## 📋 Características
+## 🎯 ¿Qué es esto?
 
-- ✅ **56 fichas oficiales** - Sistema completo de fichas con números 0-5
-- ✅ **Reglas 100% reales** - Matching de bordes, bonos, penalidades
-- ✅ **4 estrategias de IA** - Greedy, Balanced, Defensive, Random
-- ✅ **Visualización animada** - Tema oscuro estilo "War Games"
-- ✅ **Simulación de N partidas** - Con estadísticas detalladas
+Un programa que simula partidas completas de Triominó entre 2 jugadores controlados por IA. Incluye:
+
+- ✅ Reglas 100% oficiales (tomadas de Wikipedia)
+- ✅ 56 fichas triangulares con valores 0-5
+- ✅ Sistema de puntuación completo con bonos y penalidades
+- ✅ Visualización animada en tiempo real
+- ✅ Estadísticas de múltiples partidas
 
 ---
 
-## 🚀 Instalación
+## 🚀 Instalación Rápida
 
-### 1. Clonar el repositorio
 ```bash
+# 1. Clonar el repositorio
 git clone https://github.com/tu-usuario/triomino-generator.git
 cd triomino-generator
-```
 
-### 2. Crear entorno virtual
-```bash
-# Crear venv
-python3 -m venv .venv
+# 2. Crear entorno virtual
+python3 -m venv venv
 
-# Activar venv
-source .venv/bin/activate        # macOS/Linux
-# .venv\Scripts\activate         # Windows
-```
+# 3. Activar entorno virtual
+source venv/bin/activate   # macOS/Linux
+# venv\Scripts\activate    # Windows
 
-### 3. Instalar dependencias
-```bash
+# 4. Instalar dependencias
 pip install -r requirements.txt
 ```
 
 ---
 
-## ▶️ Ejecución
+## ▶️ Cómo Ejecutar
 
-### Modo visualizado (recomendado)
+### Opción 1: Con visualización (recomendado)
 ```bash
 python3 main.py
 ```
-Muestra las partidas con animación en tiempo real.
+Verás el tablero animado con las fichas colocándose en tiempo real.
 
-### Opciones de línea de comandos
+### Opción 2: Modo rápido (solo estadísticas)
+```bash
+python3 main.py --fast
+```
+Sin gráficos, muestra solo los resultados finales.
+
+### Opciones adicionales
 
 | Opción | Descripción | Ejemplo |
 |--------|-------------|---------|
-| `-m, --matches` | Número de partidas | `--matches 10` |
-| `-f, --fast` | Sin visualización | `--fast` |
-| `-s, --seed` | Seed para reproducibilidad | `--seed 42` |
-| `-d, --delay` | Delay de animación (seg) | `--delay 0.1` |
+| `--matches N` | Cantidad de partidas | `--matches 10` |
+| `--fast` | Sin visualización | `--fast` |
+| `--seed N` | Resultado reproducible | `--seed 42` |
+| `--delay N` | Velocidad de animación | `--delay 0.1` |
 
 ### Ejemplos
+
 ```bash
 # 10 partidas con visualización
 python3 main.py --matches 10
 
-# Modo rápido sin gráficos (solo estadísticas)
+# 20 partidas rápidas
 python3 main.py --fast --matches 20
 
-# Resultado reproducible
+# Partida reproducible
 python3 main.py --seed 42
 
 # Animación más rápida
 python3 main.py --delay 0.1
-
-# Ver ayuda
-python3 main.py --help
 ```
 
 ---
 
-## 📊 Sistema de Puntuación
+## 📊 Reglas de Puntuación
 
-| Evento | Puntos |
+| Acción | Puntos |
 |--------|--------|
 | Colocar ficha | Suma de los 3 valores |
-| Abrir con triple | +10 bonus |
+| Abrir con triple (ej: 3-3-3) | +10 bonus |
 | Abrir con 0-0-0 | +40 bonus |
 | Completar hexágono | +50 bonus |
 | Formar puente | +40 bonus |
-| Robar del pozo | -5 por ficha (máx 3) |
-| No jugar tras 3 robos | -25 adicional |
+| Robar del pozo | -5 por ficha |
+| No poder jugar tras 3 robos | -25 adicional |
 | Pasar (pozo vacío) | -10 |
-| Ganar ronda | +25 + suma fichas oponentes |
+| Ganar la ronda | +25 + suma de fichas del oponente |
 
-**Victoria:** Primer jugador en llegar a 400 puntos activa la ronda final. Gana quien tenga más puntos al terminar esa ronda.
+**¿Cómo ganar?** El primero en llegar a 400 puntos activa la "ronda final". Al terminar esa ronda, gana quien tenga más puntos.
 
 ---
 
-## 🗂️ Estructura del Proyecto
+## 📁 Estructura del Proyecto
 
 ```
 triomino-generator/
+├── main.py              # ← Punto de entrada (ejecutar este)
 ├── src/
-│   ├── models/          # Modelos: ficha, jugador, tablero
-│   ├── engine/          # Motor: reglas, turnos, simulación
+│   ├── models/          # Fichas, jugadores, tablero
+│   ├── engine/          # Motor del juego y reglas
 │   ├── ai/              # Estrategias de IA
-│   └── visualization/   # Renderizado matplotlib
-├── main.py              # Punto de entrada
+│   └── visualization/   # Renderizado con matplotlib
 ├── RULES.md             # Reglas oficiales en español
-└── requirements.txt     # Dependencias
+├── requirements.txt     # Dependencias (numpy, matplotlib)
+└── README.md            # Este archivo
 ```
 
 ---
 
 ## 📖 Reglas Oficiales
 
-Ver [RULES.md](RULES.md) para el reglamento completo del juego.
+Ver [RULES.md](RULES.md) para el reglamento completo.
 
 Fuente: [Wikipedia - Triominoes](https://en.wikipedia.org/wiki/Triominoes)
 
 ---
 
-## 🤝 Contribuir
+## 🛠️ Requisitos
 
-1. Fork el proyecto
-2. Crear rama feature (`git checkout -b feature/nueva-feature`)
-3. Commit cambios (`git commit -m 'Add nueva feature'`)
-4. Push a la rama (`git push origin feature/nueva-feature`)
-5. Abrir Pull Request
+- Python 3.9 o superior
+- numpy
+- matplotlib
 
 ---
 
 ## 📄 Licencia
 
-MIT License - ver [LICENSE](LICENSE) para más detalles.
+MIT License

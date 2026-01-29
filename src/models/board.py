@@ -1,404 +1,305 @@
 """
 Game Board Model
 
-Represents the triangular grid where tiles are placed.
-Handles placement validation, neighbor detection, and bonus calculations.
+Uses generator1.py's coordinate system: (row, col, orientation)
+where orientation is 'up' or 'down'.
 """
 from __future__ import annotations
 from typing import Dict, List, Tuple, Optional, Set
 from dataclasses import dataclass, field
 from enum import Enum
+import numpy as np
 
 from .tile import Triomino, PlacedTile, Edge
 
 
 class BonusType(Enum):
-    """Types of bonus points that can be earned."""
     NONE = 0
-    BRIDGE = 40           # Matching 1 side + opposite vertex
-    HEXAGON = 50          # Completing a 6-tile hexagon
-    DOUBLE_HEXAGON = 100  # Completing two hexagons at once
+    BRIDGE = 40
+    HEXAGON = 50
+    DOUBLE_HEXAGON = 100
 
 
 @dataclass
 class PlacementResult:
-    """Result of attempting to place a tile."""
     success: bool
     tile: Optional[PlacedTile] = None
-    base_points: int = 0           # Sum of tile values
-    bonus_type: BonusType = BonusType.NONE
+    base_points: int = 0
+    bonus_type: BonusType = BonusType.NONE  # Deprecated: use bridge_count/hexagon_count
     bonus_points: int = 0
     total_points: int = 0
     message: str = ""
+    bridge_count: int = 0
+    hexagon_count: int = 0
     
     @property
     def is_bridge(self) -> bool:
-        return self.bonus_type == BonusType.BRIDGE
+        return self.bridge_count > 0
     
     @property
     def is_hexagon(self) -> bool:
-        return self.bonus_type in (BonusType.HEXAGON, BonusType.DOUBLE_HEXAGON)
+        return self.hexagon_count > 0
 
 
 @dataclass 
 class ValidPlacement:
-    """A valid position and rotation for placing a tile."""
-    q: int
-    r: int
+    row: int
+    col: int
+    orientation: str  # 'up' or 'down'
     rotation: int
-    edges_matched: int  # How many edges match (1, 2, or 3)
-    is_bridge: bool = False
-    is_hexagon: bool = False
+    edges_matched: int
+    bridge_count: int = 0
+    hexagon_count: int = 0
+    
+    @property
+    def position(self) -> Tuple[int, int, str]:
+        return (self.row, self.col, self.orientation)
+
+    @property
+    def is_bridge(self) -> bool:
+        return self.bridge_count > 0
+
+    @property
+    def is_hexagon(self) -> bool:
+        return self.hexagon_count > 0
 
 
-# Neighbor offsets for triangular grid
-# For UP-pointing triangles (▲): (q + r) % 2 == 0
-NEIGHBORS_UP = {
-    0: (-1, 0),   # Left neighbor (edge 0)
-    1: (0, 1),    # Bottom neighbor (edge 1)  
-    2: (1, 0),    # Right neighbor (edge 2)
-}
+# Grid constants (from generator1.py)
+SIDE = 1.0
+H = np.sqrt(3) / 2 * SIDE
 
-# For DOWN-pointing triangles (▼): (q + r) % 2 == 1
-NEIGHBORS_DOWN = {
-    0: (-1, 0),   # Left neighbor (edge 0)
-    1: (0, -1),   # Top neighbor (edge 1)
-    2: (1, 0),    # Right neighbor (edge 2)
-}
 
-# Opposite edge mapping (when two triangles share an edge)
-OPPOSITE_EDGE = {0: 2, 1: 1, 2: 0}
+def get_triangle_vertices(row: int, col: int, orientation: str) -> np.ndarray:
+    """
+    Get vertices for triangle at (row, col, orientation).
+    From generator1.py - this is the CORRECT way to compute positions.
+    """
+    x0 = col * SIDE + (row % 2) * (SIDE / 2)
+    y0 = row * H
+    
+    if orientation == 'up':
+        return np.array([
+            (x0 + SIDE/2, y0),       # Top (v0)
+            (x0, y0 + H),             # Bottom-left (v1)
+            (x0 + SIDE, y0 + H)       # Bottom-right (v2)
+        ])
+    else:  # 'down'
+        return np.array([
+            (x0 + SIDE/2, y0 + 2*H), # Bottom (v0)
+            (x0, y0 + H),             # Top-left (v1)
+            (x0 + SIDE, y0 + H)       # Top-right (v2)
+        ])
+
+
+def get_edges(vertices: np.ndarray) -> Set[frozenset]:
+    """Get edges as sets of vertex pairs (from generator1.py)."""
+    pts = [(round(pt[0], 5), round(pt[1], 5)) for pt in vertices]
+    edges = set()
+    for k in range(3):
+        edge = frozenset([pts[k], pts[(k+1) % 3]])
+        edges.add(edge)
+    return edges
+
+
+def _round_vertex(pt: Tuple[float, float]) -> Tuple[float, float]:
+    return (round(pt[0], 5), round(pt[1], 5))
+
+
+def triangles_are_adjacent(pos1: Tuple[int, int, str], 
+                            pos2: Tuple[int, int, str]) -> bool:
+    """
+    Check if two triangles share an edge (from generator1.py approach).
+    Two triangles are adjacent if they share exactly one complete edge.
+    """
+    v1 = get_triangle_vertices(*pos1)
+    v2 = get_triangle_vertices(*pos2)
+    e1 = get_edges(v1)
+    e2 = get_edges(v2)
+    shared = e1 & e2
+    return len(shared) == 1
+
+
+def get_shared_edge_index(pos1: Tuple[int, int, str], 
+                           pos2: Tuple[int, int, str]) -> Optional[Tuple[int, int]]:
+    """
+    Get which edge indices are shared between two adjacent triangles.
+    Returns (edge_idx_of_pos1, edge_idx_of_pos2) or None if not adjacent.
+    """
+    v1 = get_triangle_vertices(*pos1)
+    v2 = get_triangle_vertices(*pos2)
+    
+    pts1 = [(round(pt[0], 5), round(pt[1], 5)) for pt in v1]
+    pts2 = [(round(pt[0], 5), round(pt[1], 5)) for pt in v2]
+    
+    for i in range(3):
+        edge1 = frozenset([pts1[i], pts1[(i+1) % 3]])
+        for j in range(3):
+            edge2 = frozenset([pts2[j], pts2[(j+1) % 3]])
+            if edge1 == edge2:
+                return (i, j)
+    return None
 
 
 class GameBoard:
     """
-    The Triomino game board using axial coordinates.
+    Triomino game board using generator1.py coordinate system.
     
-    Coordinate system:
-    - Uses axial (q, r) coordinates for triangular grid
-    - Triangle orientation determined by (q + r) % 2:
-        - 0 = Up-pointing triangle (▲)
-        - 1 = Down-pointing triangle (▼)
+    Position format: (row, col, orientation)
+    - row: vertical row (0, 1, 2, ...)
+    - col: horizontal column (0, 1, 2, ...)
+    - orientation: 'up' or 'down'
     """
     
     def __init__(self):
-        self.tiles: Dict[Tuple[int, int], PlacedTile] = {}
+        self.tiles: Dict[Tuple[int, int, str], PlacedTile] = {}
         self._move_history: List[PlacedTile] = []
+        self._adjacency_cache: Dict[Tuple[int, int, str], List[Tuple[int, int, str]]] = {}
     
     def is_empty(self) -> bool:
-        """Check if no tiles have been placed."""
         return len(self.tiles) == 0
     
-    def is_position_occupied(self, q: int, r: int) -> bool:
-        """Check if a position already has a tile."""
-        return (q, r) in self.tiles
+    def is_position_occupied(self, row: int, col: int, orientation: str) -> bool:
+        return (row, col, orientation) in self.tiles
     
-    def get_tile_at(self, q: int, r: int) -> Optional[PlacedTile]:
-        """Get the tile at a position, if any."""
-        return self.tiles.get((q, r))
+    def get_tile_at(self, row: int, col: int, orientation: str) -> Optional[PlacedTile]:
+        return self.tiles.get((row, col, orientation))
     
-    def is_pointing_up(self, q: int, r: int) -> bool:
-        """Determine if a triangle at (q, r) points up or down."""
-        return (q + r) % 2 == 0
+    def _get_potential_neighbors(self, row: int, col: int, orientation: str) -> List[Tuple[int, int, str]]:
+        """Get all positions that could potentially be neighbors."""
+        positions = []
+        # Check nearby cells (within distance 1-2)
+        for dr in range(-1, 2):
+            for dc in range(-1, 2):
+                for ori in ['up', 'down']:
+                    pos = (row + dr, col + dc, ori)
+                    if pos != (row, col, orientation):
+                        positions.append(pos)
+        return positions
     
-    def get_neighbors(self, q: int, r: int) -> Dict[int, Tuple[int, int]]:
-        """Get neighbor positions for each edge of triangle at (q, r)."""
-        if self.is_pointing_up(q, r):
-            return {edge: (q + dq, r + dr) for edge, (dq, dr) in NEIGHBORS_UP.items()}
-        else:
-            return {edge: (q + dq, r + dr) for edge, (dq, dr) in NEIGHBORS_DOWN.items()}
+    def get_neighbors(self, row: int, col: int, orientation: str) -> List[Tuple[int, int, str]]:
+        """Get all adjacent positions (positions that share an edge)."""
+        pos = (row, col, orientation)
+        
+        if pos in self._adjacency_cache:
+            return self._adjacency_cache[pos]
+        
+        neighbors = []
+        for potential in self._get_potential_neighbors(row, col, orientation):
+            if triangles_are_adjacent(pos, potential):
+                neighbors.append(potential)
+        
+        self._adjacency_cache[pos] = neighbors
+        return neighbors
     
-    def get_adjacent_tiles(self, q: int, r: int) -> Dict[int, PlacedTile]:
-        """Get placed tiles adjacent to position (q, r), keyed by edge index."""
-        neighbors = self.get_neighbors(q, r)
+    def get_adjacent_tiles(self, row: int, col: int, orientation: str) -> Dict[Tuple[int, int, str], PlacedTile]:
+        """Get placed tiles adjacent to a position."""
+        neighbors = self.get_neighbors(row, col, orientation)
         return {
-            edge: self.tiles[pos] 
-            for edge, pos in neighbors.items() 
-            if pos in self.tiles
+            n: self.tiles[n]
+            for n in neighbors
+            if n in self.tiles
         }
     
-    def get_open_positions(self) -> Set[Tuple[int, int]]:
-        """Get all positions adjacent to placed tiles that are empty."""
+    def get_open_positions(self) -> Set[Tuple[int, int, str]]:
+        """Get all empty positions adjacent to placed tiles."""
         if self.is_empty():
-            return {(0, 0)}  # Start at origin
+            return {(7, 7, 'up')}  # Start in middle of grid
         
         open_positions = set()
-        for (q, r) in self.tiles:
-            for edge, (nq, nr) in self.get_neighbors(q, r).items():
-                if (nq, nr) not in self.tiles:
-                    open_positions.add((nq, nr))
+        for pos in self.tiles:
+            for neighbor in self.get_neighbors(*pos):
+                if neighbor not in self.tiles:
+                    open_positions.add(neighbor)
         return open_positions
     
-    def _get_required_edges(self, q: int, r: int) -> Dict[int, Edge]:
-        """
-        Get the edges that must be matched at position (q, r).
+    def _check_edge_match(self, tile: Triomino, my_pos: Tuple[int, int, str],
+                          adj_tile: PlacedTile, adj_pos: Tuple[int, int, str]) -> bool:
+        """Check if edges match between tile at my_pos and adj_tile at adj_pos."""
+        edge_indices = get_shared_edge_index(my_pos, adj_pos)
+        if edge_indices is None:
+            return False
         
-        Returns dict of edge_index -> required Edge values.
-        """
-        adjacent = self.get_adjacent_tiles(q, r)
-        required = {}
+        my_edge_idx, adj_edge_idx = edge_indices
+        my_edge = tile.get_edge(my_edge_idx)
+        adj_edge = adj_tile.tile.get_edge(adj_edge_idx)
         
-        for edge_idx, adj_tile in adjacent.items():
-            # Get the edge of the adjacent tile that faces this position
-            opp_edge_idx = OPPOSITE_EDGE[edge_idx]
-            adj_edge = adj_tile.tile.get_edge(opp_edge_idx)
-            # We need to match this edge (in reverse)
-            required[edge_idx] = adj_edge
-        
-        return required
+        return my_edge.matches(adj_edge)
     
     def find_valid_placements(self, tile: Triomino) -> List[ValidPlacement]:
-        """
-        Find all valid positions and rotations for placing a tile.
-        
-        Returns list of ValidPlacement objects.
-        """
+        """Find all valid positions and rotations for a tile."""
         valid = []
         
-        for (q, r) in self.get_open_positions():
-            required_edges = self._get_required_edges(q, r)
+        for pos in self.get_open_positions():
+            row, col, orientation = pos
+            adjacent = self.get_adjacent_tiles(row, col, orientation)
             
-            if not required_edges and not self.is_empty():
-                continue  # Must connect to existing tiles
+            if not adjacent and not self.is_empty():
+                continue
             
             # Try each rotation
             for rotation in range(3):
                 tile.rotation = rotation
                 
-                # Check if all required edges match
+                # Check all edges match
                 all_match = True
-                for edge_idx, required_edge in required_edges.items():
-                    tile_edge = tile.get_edge(edge_idx)
-                    if not tile_edge.matches(required_edge):
+                for adj_pos, adj_tile in adjacent.items():
+                    if not self._check_edge_match(tile, pos, adj_tile, adj_pos):
                         all_match = False
                         break
                 
                 if all_match:
-                    edges_matched = len(required_edges) if required_edges else 0
-                    
-                    # Check for bridge (matching 2+ edges from different "groups")
-                    is_bridge = self._check_bridge(q, r, tile, required_edges)
-                    
-                    # Check for hexagon
-                    is_hexagon = self._check_hexagon(q, r, tile)
+                    edges_matched = len(adjacent)
+                    is_bridge = edges_matched >= 2
                     
                     valid.append(ValidPlacement(
-                        q=q, r=r, 
+                        row=row, col=col, orientation=orientation,
                         rotation=rotation,
                         edges_matched=edges_matched,
                         is_bridge=is_bridge,
-                        is_hexagon=is_hexagon
+                        is_hexagon=False  # TODO: implement
                     ))
         
-        tile.rotation = 0  # Reset rotation
+        tile.rotation = 0
         return valid
     
-    def _check_bridge(self, q: int, r: int, tile: Triomino, 
-                      required_edges: Dict[int, Edge]) -> bool:
-        """
-        Check if placement creates a bridge.
-        
-        A bridge is formed when a tile matches:
-        - One complete side (2 vertex values)
-        - AND the opposite point (1 vertex value touching other tiles)
-        
-        Essentially: matching 2 or more edges.
-        """
-        # Bridge requires matching at least 2 edges
-        return len(required_edges) >= 2
-    
-    def _check_hexagon(self, q: int, r: int, tile: Triomino) -> bool:
-        """
-        Check if placement completes a hexagon.
-        
-        A hexagon is formed when 6 triangles surround a central point,
-        and this tile is the 6th piece completing the circle.
-        
-        The center point should have the same value from all 6 triangles.
-        """
-        # Get the vertices of the tile at this position
-        tile_vertices = self._get_vertex_positions(q, r)
-        
-        # For each vertex of this tile, check if it completes a hexagon
-        for vertex_idx, vertex_pos in enumerate(tile_vertices):
-            # Get all tiles that share this vertex
-            tiles_at_vertex = self._get_tiles_sharing_vertex(vertex_pos, exclude=(q, r))
-            
-            # A hexagon needs exactly 5 other tiles at this vertex (6 total including this one)
-            if len(tiles_at_vertex) == 5:
-                # All values at this vertex must match
-                vertex_value = tile.values[vertex_idx]
-                all_match = all(
-                    self._get_vertex_value_at_position(t, vertex_pos) == vertex_value
-                    for t in tiles_at_vertex
-                )
-                if all_match:
-                    return True
-        
-        return False
-    
-    def _get_vertex_positions(self, q: int, r: int) -> List[Tuple[float, float]]:
-        """
-        Get approximate vertex positions for the triangle at (q, r).
-        Used for detecting shared vertices.
-        """
-        # Simplified vertex calculation for hexagon detection
-        # This is a logical representation, not exact coordinates
-        is_up = self.is_pointing_up(q, r)
-        
-        if is_up:
-            return [
-                (q + 0.5, r - 0.33),      # Top vertex (v0)
-                (q - 0.5, r + 0.33),      # Bottom-left (v1)
-                (q + 0.5, r + 0.33),      # Bottom-right (v2)
-            ]
-        else:
-            return [
-                (q + 0.5, r + 0.33),      # Bottom vertex (v0)
-                (q - 0.5, r - 0.33),      # Top-left (v1)
-                (q + 0.5, r - 0.33),      # Top-right (v2)
-            ]
-    
-    def _get_tiles_sharing_vertex(self, vertex_pos: Tuple[float, float], 
-                                   exclude: Tuple[int, int] = None) -> List[PlacedTile]:
-        """Get all placed tiles that share a vertex position."""
-        # Simplified: check tiles within logical range that could share this vertex
-        sharing = []
-        vx, vy = vertex_pos
-        
-        for (q, r), tile in self.tiles.items():
-            if exclude and (q, r) == exclude:
-                continue
-            
-            tile_vertices = self._get_vertex_positions(q, r)
-            for tv in tile_vertices:
-                if abs(tv[0] - vx) < 0.01 and abs(tv[1] - vy) < 0.01:
-                    sharing.append(tile)
-                    break
-        
-        return sharing
-    
-    def _get_vertex_value_at_position(self, placed_tile: PlacedTile, 
-                                       vertex_pos: Tuple[float, float]) -> Optional[int]:
-        """Get the value of a tile's vertex at a specific position."""
-        tile_vertices = self._get_vertex_positions(placed_tile.q, placed_tile.r)
-        
-        for idx, tv in enumerate(tile_vertices):
-            if abs(tv[0] - vertex_pos[0]) < 0.01 and abs(tv[1] - vertex_pos[1]) < 0.01:
-                return placed_tile.tile.values[idx]
-        
-        return None
-    
-    def place_tile(self, tile: Triomino, q: int, r: int, 
+    def place_tile(self, tile: Triomino, row: int, col: int, orientation: str,
                    rotation: int, player_id: Optional[int] = None) -> PlacementResult:
-        """
-        Place a tile on the board at position (q, r) with given rotation.
+        """Place a tile at the given position."""
+        pos = (row, col, orientation)
         
-        Args:
-            tile: The tile to place
-            q, r: Board position
-            rotation: Rotation (0, 1, or 2)
-            player_id: ID of player placing the tile
-            
-        Returns:
-            PlacementResult with success status and points earned
-        """
-        # Check if position is valid
-        if self.is_position_occupied(q, r):
-            return PlacementResult(
-                success=False,
-                message=f"Position ({q}, {r}) is already occupied"
-            )
+        if pos in self.tiles:
+            return PlacementResult(success=False, message="Position occupied")
         
-        # Check if this connects to existing tiles (unless first tile)
         if not self.is_empty():
-            adjacent = self.get_adjacent_tiles(q, r)
+            adjacent = self.get_adjacent_tiles(row, col, orientation)
             if not adjacent:
-                return PlacementResult(
-                    success=False,
-                    message=f"Position ({q}, {r}) is not adjacent to any placed tiles"
-                )
-        
-        # Set rotation and check edge matching
-        tile.rotation = rotation
-        required_edges = self._get_required_edges(q, r)
-        
-        for edge_idx, required_edge in required_edges.items():
-            tile_edge = tile.get_edge(edge_idx)
-            if not tile_edge.matches(required_edge):
-                return PlacementResult(
-                    success=False,
-                    message=f"Edge {edge_idx} does not match: {tile_edge} vs {required_edge}"
-                )
-        
-        # Valid placement - calculate points
-        placed = PlacedTile(tile=tile.copy(), q=q, r=r, player_id=player_id)
-        
-        # Determine bonus
-        is_bridge = self._check_bridge(q, r, tile, required_edges)
-        is_hexagon = self._check_hexagon(q, r, tile)
-        
-        bonus_type = BonusType.NONE
-        bonus_points = 0
-        
-        if is_hexagon:
-            # TODO: Check for double hexagon
-            bonus_type = BonusType.HEXAGON
-            bonus_points = 50
-        elif is_bridge:
-            bonus_type = BonusType.BRIDGE
-            bonus_points = 40
-        
-        base_points = tile.sum_value
-        total_points = base_points + bonus_points
-        
-        # Add to board
-        self.tiles[(q, r)] = placed
-        self._move_history.append(placed)
-        
-        return PlacementResult(
-            success=True,
-            tile=placed,
-            base_points=base_points,
-            bonus_type=bonus_type,
-            bonus_points=bonus_points,
-            total_points=total_points,
-            message=f"Placed {tile} at ({q}, {r})"
-        )
-    
-    def place_first_tile(self, tile: Triomino, player_id: Optional[int] = None,
-                         is_triple: bool = False) -> PlacementResult:
-        """
-        Place the first tile of the game at the origin.
-        
-        Args:
-            tile: The starting tile
-            player_id: ID of starting player
-            is_triple: True if this is a triple tile (for bonus calculation)
+                return PlacementResult(success=False, message="Not adjacent to any tile")
             
-        Returns:
-            PlacementResult with bonus applied if applicable
-        """
-        if not self.is_empty():
-            return PlacementResult(
-                success=False,
-                message="Board is not empty - cannot place first tile"
-            )
+            tile.rotation = rotation
+            for adj_pos, adj_tile in adjacent.items():
+                if not self._check_edge_match(tile, pos, adj_tile, adj_pos):
+                    return PlacementResult(success=False, message="Edges don't match")
         
-        placed = PlacedTile(tile=tile.copy(), q=0, r=0, player_id=player_id)
-        self.tiles[(0, 0)] = placed
+        # Valid placement
+        tile.rotation = rotation
+        placed = PlacedTile(
+            tile=tile.copy(), 
+            q=row,  # Using q for row
+            r=col,  # Using r for col
+            player_id=player_id,
+            orientation=orientation
+        )
+        
+        self.tiles[pos] = placed
         self._move_history.append(placed)
         
-        base_points = tile.sum_value
-        bonus_points = 0
-        bonus_type = BonusType.NONE
+        # Calculate bonus
+        edges_matched = len(self.get_adjacent_tiles(row, col, orientation))
+        is_bridge = edges_matched >= 2
         
-        # Triple bonus
-        if is_triple:
-            if tile.is_triple_zero():
-                bonus_points = 40  # Special 0-0-0 bonus
-            else:
-                bonus_points = 10  # Regular triple bonus
+        bonus_type = BonusType.BRIDGE if is_bridge else BonusType.NONE
+        bonus_points = 40 if is_bridge else 0
+        base_points = tile.sum_value
         
         return PlacementResult(
             success=True,
@@ -407,27 +308,54 @@ class GameBoard:
             bonus_type=bonus_type,
             bonus_points=bonus_points,
             total_points=base_points + bonus_points,
-            message=f"First tile: {tile} placed at origin"
+            message=f"Placed {tile} at ({row}, {col}, {orientation})"
+        )
+    
+    def place_first_tile(self, tile: Triomino, player_id: Optional[int] = None,
+                         is_triple: bool = False) -> PlacementResult:
+        """Place the first tile at the center."""
+        if not self.is_empty():
+            return PlacementResult(success=False, message="Board not empty")
+        
+        pos = (7, 7, 'up')  # Center of grid
+        placed = PlacedTile(
+            tile=tile.copy(),
+            q=7, r=7,
+            player_id=player_id,
+            orientation='up'
+        )
+        
+        self.tiles[pos] = placed
+        self._move_history.append(placed)
+        
+        base_points = tile.sum_value
+        bonus_points = 0
+        if is_triple:
+            bonus_points = 40 if tile.is_triple_zero() else 10
+        
+        return PlacementResult(
+            success=True,
+            tile=placed,
+            base_points=base_points,
+            bonus_points=bonus_points,
+            total_points=base_points + bonus_points,
+            message=f"First tile: {tile}"
         )
     
     @property
     def tile_count(self) -> int:
-        """Number of tiles on the board."""
         return len(self.tiles)
     
     @property
     def move_history(self) -> List[PlacedTile]:
-        """List of placed tiles in order."""
         return self._move_history.copy()
     
     def get_bounds(self) -> Tuple[int, int, int, int]:
-        """Get bounding box of placed tiles: (min_q, max_q, min_r, max_r)."""
         if self.is_empty():
-            return (0, 0, 0, 0)
-        
-        qs = [pos[0] for pos in self.tiles.keys()]
-        rs = [pos[1] for pos in self.tiles.keys()]
-        return (min(qs), max(qs), min(rs), max(rs))
+            return (7, 7, 7, 7)
+        rows = [pos[0] for pos in self.tiles.keys()]
+        cols = [pos[1] for pos in self.tiles.keys()]
+        return (min(rows), max(rows), min(cols), max(cols))
     
     def __repr__(self) -> str:
         return f"GameBoard({len(self.tiles)} tiles)"

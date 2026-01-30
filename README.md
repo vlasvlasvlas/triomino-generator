@@ -5,6 +5,8 @@ Un juego de Triominó con interfaz gráfica en Pygame y agentes de RL entrenable
 ![Python](https://img.shields.io/badge/python-3.11+-yellow.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
+📖 **[Reglas del juego](RULES.md)** - Si no conocés el Triominó, empezá por acá.
+
 ---
 
 ## Modos de Juego

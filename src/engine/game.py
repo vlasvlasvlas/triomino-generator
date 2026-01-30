@@ -76,6 +76,9 @@ class TriominoGame:
         if len(strategies) != len(self.players):
             raise ValueError("Number of strategies must match number of players")
         self.strategies = strategies
+        for strat in self.strategies:
+            if hasattr(strat, "set_game"):
+                strat.set_game(self)
         self.target_score = target_score
         self.seed = seed
         
@@ -165,7 +168,6 @@ class TriominoGame:
     
     def execute_place(self, player: Player, tile: Triomino, placement: ValidPlacement, draws_made: int = 0) -> TurnResult:
         """Execute a placement action atomatically."""
-        player.play_tile(tile)
         # Ensure rotation is set correctly on the tile copy
         tile.rotation = placement.rotation
         
@@ -177,6 +179,20 @@ class TriominoGame:
             rotation=placement.rotation,
             player_id=self.players.index(player)
         )
+
+        if not result.success:
+            return TurnResult(
+                player=player,
+                action=TurnAction.PLACE_TILE,
+                tile_placed=None,
+                tiles_drawn=draws_made,
+                points_earned=0,
+                events=[],
+                success=False,
+                message=result.message
+            )
+
+        player.play_tile(tile)
         
         points, events = calculate_placement_score(result, draws_made)
         player.add_score(points)

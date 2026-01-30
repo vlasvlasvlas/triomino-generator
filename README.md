@@ -1,114 +1,156 @@
 # 🎮 Triominó Professional Edition
 
-> **State-of-the-Art implementation of the Triominó board game, featuring a premium Pygame interface, robust Reinforcement Learning agents, and fully customizable aesthetics.**
+> **A State-of-the-Art implementation of the Triominó board game with premium Pygame graphics, Reinforcement Learning agents, and AI training capabilities.**
 
+![Python](https://img.shields.io/badge/python-3.11+-yellow.svg)
+![Pygame](https://img.shields.io/badge/pygame-2.6+-green.svg)
+![RL](https://img.shields.io/badge/AI-MaskablePPO-red.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Python](https://img.shields.io/badge/python-3.9+-yellow.svg)
-![Status](https://img.shields.io/badge/status-stable-green.svg)
-![AI](https://img.shields.io/badge/AI-Reinforcement%20Learning-red)
 
 ---
 
-## ✨ Características Principales
+## ✨ Features
 
-### 🖥️ Interfaz Gráfica SOTA (Pygame)
-*   **Visualización Nativa:** Adiós a la terminal. Juego renderizado a 60 FPS con animaciones fluidas y gráficos vectoriales.
-*   **Drag & Drop Feeling:** Sistema intuitivo "Click & Place". Selecciona tu ficha y las **"Sombras Guía" (Ghosts)** te mostrarán exactamente dónde puedes jugarla.
-*   **Personalización Total:**
-    *   **6 Temas de Fichas:** *Classic, Ocean, Sunset, Nature, Cyber, Pastel*.
-    *   **5 Fondos de Alto Contraste:** *Midnight, Deep Ocean, Forest, Void, Slate* (Optimizados para largas sesiones).
+### 🎨 Premium Visual Interface
+- **60 FPS Rendering** with anti-aliased vector graphics
+- **6 Color Themes**: Classic, Ocean, Sunset, Nature, Cyber, Pastel
+- **5 Backgrounds**: Midnight, Deep Ocean, Forest, Void, Slate
+- **Ghost Placement System**: Visual guides show valid moves
+- **Interactive Camera**: Zoom (scroll) and Pan (right-click drag)
 
-### 🤖 Inteligencia Artificial y RL
-*   **Agentes Inteligentes:** Desde estrategias *Greedy* (codiciosas) hasta modelos entrenados con **Proximal Policy Optimization (PPO)**.
-*   **Pipeline de Entrenamiento Completo:** Entorno compatible con `Gymnasium` y `Stable-Baselines3` para entrenar tus propios agentes desde cero.
-*   **Modo Simulación:** Observa a dos IAs luchar entre sí a velocidad sobrehumana (o lenta para análisis).
+### 🤖 AI & Reinforcement Learning
+- **Multiple AI Strategies**: Greedy, Random, PPO-trained agents
+- **Built-in Training**: Launch RL training directly from the menu
+- **TensorBoard Integration**: Monitor training metrics in real-time
+- **Action Masking**: Ensures only valid moves are considered
 
-### 👥 Modos de Juego
-1.  **Human vs AI:** Desafía a la máquina.
-2.  **Human vs Human (Hotseat):** Modo local para dos jugadores con sistema **Anti-Cheat (Cortina)** que oculta la mano del oponente entre turnos.
-3.  **Bot vs Bot:** Relájate y mira cómo juegan las estrategias.
+### 👥 Game Modes
+| Mode | Description |
+|------|-------------|
+| **Human vs AI** | Challenge the AI at various difficulties |
+| **Human vs Human** | Local hotseat with hand-hiding "curtain" |
+| **Bot vs Bot** | Watch AIs battle (infinite mode for training) |
 
 ---
 
-## 🚀 Inicio Rápido (Quick Start)
+## 🚀 Quick Start
 
-Hemos simplificado todo con el script maestro `run.sh`.
-
-### 1. Instalación
+### Installation
 ```bash
-# Crear entorno virtual (recomendado)
+git clone https://github.com/your-repo/triomino-generator.git
+cd triomino-generator
 python3 -m venv venv
 source venv/bin/activate
-
-# Instalar dependencias
 pip install -r requirements.txt
 ```
 
-### 2. Jugar (GUI)
-Lanza la interfaz gráfica profesional:
+### Play
 ```bash
 ./run.sh
 ```
-*Desde el menú principal podrás elegir Modo, Dificultad, Nombres y Colores.*
 
-### 3. Otros Comandos
+### Train RL Agent
+**Option A: From Menu**
+Click the "🧠 Train RL Agent" button in the main menu.
+
+**Option B: Command Line**
 ```bash
-# Entrenar un nuevo agente de RL (Training Loop)
 ./run.sh train
+```
 
-# Jugar en modo Legacy (Terminal/ASCII)
-./run.sh cli
+### Monitor Training
+```bash
+tensorboard --logdir logs/triomino_rl/
 ```
 
 ---
 
-## 🎮 Guía de Interfaz
+## 🎮 Controls
 
-### Controles
-*   **Mouse Izquierdo:**
-    *   **Click en Mano:** Seleccionar ficha (se ilumina en dorado).
-    *   **Click en Tablero:** Colocar ficha seleccionada sobre una **"Sombra Guía" (Ghost tile)**.
-    *   **Botones:** Usar los botones [DRAW] y [PASS] en pantalla.
-*   **Navegación:** Todo el menú es controlable con el mouse.
-
-### Modos de Visualización
-En el **Menú Principal**, usa los selectores circulares para cambiar la estética del juego *antes* de empezar. Tus preferencias se aplican instantáneamente al tablero.
+| Input | Action |
+|-------|--------|
+| **Left Click (Hand)** | Select tile |
+| **Left Click (Ghost)** | Place tile |
+| **Right Click + Drag** | Pan camera |
+| **Mouse Wheel** | Zoom in/out |
+| **N** | Toggle Night Mode (Bot vs Bot) |
+| **G** | Toggle Ghost Trails (Bot vs Bot) |
+| **↑/↓** | Speed up/slow down (Bot vs Bot) |
+| **M** | Mute/Unmute sounds |
+| **ESC** | Return to menu |
 
 ---
 
-## 🧠 Arquitectura Técnica
+## 📁 Project Structure
 
-### Estructura del Proyecto
 ```
-.
-├── models/             # Checkpoints de modelos entrenados (RL)
+triomino-generator/
 ├── src/
-│   ├── ai/             # Estrategias (Greedy, Random, HumanWrapper)
-│   ├── engine/         # Motor lógico del juego (Reglas, Validaciones, Puntajes)
-│   ├── gui/            # NUEVO: Motor Gráfico Pygame (SOTA)
-│   │   ├── main.py     # Entrypoint de la aplicación gráfica y loop principal
-│   │   ├── assets.py   # Gestión de recursos, fuentes y paletas de colores
-│   │   └── pygame_board.py # Renderizado geométrico de triángulos
-│   ├── models/         # Clases de datos (Triomino, Board, Player)
-│   └── rl/             # Pipeline de Reinforcement Learning (Env, Train)
-├── run.sh              # Script maestro de ejecución
-└── requirements.txt    # Dependencias del proyecto
+│   ├── engine/          # Core game logic (rules, validation, scoring)
+│   ├── gui/             # Pygame interface
+│   │   ├── main.py      # Application entry point
+│   │   ├── pygame_board.py  # Board rendering
+│   │   └── assets.py    # Themes, colors, fonts
+│   ├── ai/              # AI strategies (Greedy, Random, Human wrapper)
+│   ├── rl/              # Reinforcement Learning
+│   │   ├── env.py       # Gymnasium environment
+│   │   └── train.py     # Training script (MaskablePPO)
+│   └── cli/             # Legacy terminal interface
+├── models/              # Saved RL checkpoints
+├── logs/                # Training logs + tensorboard
+├── run.sh               # Master launcher script
+└── requirements.txt
 ```
 
-### Reinforcement Learning (RL) Details
-El proyecto implementa un entorno personalizado de Gymnasium (`TriominoEnv`) que expone el estado del juego como un vector de observaciones y utiliza **Action Masking** para garantizar movimientos válidos.
-*   **Algoritmo:** MaskablePPO (`sb3-contrib`).
-*   **Rewards:** Scoring denso basado en reglas del juego + rewards por victorias.
+---
+
+## 🧠 RL Training Details
+
+| Parameter | Value |
+|-----------|-------|
+| Algorithm | MaskablePPO (sb3-contrib) |
+| Policy | MultiInputPolicy |
+| Learning Rate | 3e-4 |
+| Steps per Update | 2048 |
+| Batch Size | 64 |
+| Entropy Coefficient | 0.01 |
+
+### Observation Space
+- Board state (placed tiles)
+- Player hand (current tiles)
+- Legal action mask
+
+### Reward Shaping
+- Points earned from placements
+- Bonus for winning
+- Penalty for invalid moves (masked out)
 
 ---
 
 ## 🛠️ Troubleshooting
 
-**Problema:** `box2d-py` error durante instalación.
-**Solución:** Este proyecto NO requiere box2d. Asegúrate de usar el `requirements.txt` provisto que está limpio de dependencias innecesarias.
-
-**Problema:** La ventana se cierra inmediatamente.
-**Solución:** Ejecuta desde la terminal `./run.sh` para ver el log de errores. Asegúrate de estar en el entorno virtual.
+| Issue | Solution |
+|-------|----------|
+| `pkg_resources` warning | Harmless, ignore it |
+| Training button does nothing | Install `sb3-contrib`: `pip install sb3-contrib` |
+| Window closes immediately | Run from terminal to see error logs |
+| No sound | Check M key isn't muting |
 
 ---
-*Desarrollado con ❤️ y Python.*
+
+## 📜 Logs
+
+Logs are saved automatically:
+- `logs/gui/` - GUI session logs
+- `logs/triomino_rl/` - Training metrics
+- `models/triomino_rl/` - Model checkpoints
+
+---
+
+## 📄 License
+
+MIT License - See LICENSE file for details.
+
+---
+
+*Built with ❤️ using Python, Pygame, and Stable-Baselines3*

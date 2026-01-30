@@ -11,7 +11,7 @@ from typing import Optional, Tuple, Dict, Any, List
 from src.engine.game import TriominoGame, TurnAction
 from src.ai.strategies import get_strategy
 from src.models import Triomino, PlacedTile
-from src.engine.rules import ScoreType
+from src.engine.rules import ScoreType, calculate_pass_penalty, calculate_draw_failure_penalty
 
 # Constants
 MAX_HAND_SIZE = 30  # Max potential hand size (usually much lower)
@@ -115,12 +115,24 @@ class TriominoEnv(gym.Env):
             # PASS - End Turn
             # Penalty (25 points is standard strict penalty for passing)
             # But let's make it proportional to potential? No, fixed.
-            reward += -10.0
-            
-            # End turn logic
-            self.game.next_player()
-            self.draws_current_turn = 0
-            self._play_opponent_loop()
+            if self.draws_current_turn > 0:
+                points, _ = calculate_draw_failure_penalty(self.draws_current_turn)
+            else:
+                points, _ = calculate_pass_penalty()
+            player.add_score(points)
+            reward += points
+
+            # Round check
+            round_res = self.game.check_round_end()
+            if round_res:
+                if round_res.winner == player:
+                    reward += 100.0
+                terminated = True
+            else:
+                # End turn logic
+                self.game.next_player()
+                self.draws_current_turn = 0
+                self._play_opponent_loop()
             
         else:
             # PLAY TILE
@@ -218,7 +230,7 @@ class TriominoEnv(gym.Env):
         # Can you draw if you CAN play? Often yes (strategic).
         # We allow it unless max draws reached.
         # MAX_DRAWS usually 3.
-        if len(self.game.pool) > 0 and self.draws_current_turn < 3:
+        if len(self.game.pool) > 0 and self.draws_current_turn < 3 and not can_play_any:
              mask[self.DRAW_ACTION] = True
              
         # 3. Pass action

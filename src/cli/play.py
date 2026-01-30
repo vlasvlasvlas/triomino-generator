@@ -6,13 +6,32 @@ import sys
 import os
 import argparse
 import random
+import logging
+from datetime import datetime
 from typing import List, Optional, Tuple
 
 from src.engine.game import TriominoGame, TurnAction, TurnResult
+from src.engine.rules import calculate_pass_penalty, calculate_draw_failure_penalty
 from src.ai.strategies import AIStrategy, get_strategy, ScoredMove
 from src.models import Triomino, ValidPlacement, Player, GameBoard, create_shuffled_deck
 from src.visualization.renderer import GameRenderer
 import matplotlib.pyplot as plt
+
+LOGGER = None
+
+
+def setup_logger():
+    os.makedirs("logs/cli", exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    log_path = os.path.join("logs", "cli", f"cli-{ts}.log")
+    logger = logging.getLogger(f"triomino_cli_{ts}")
+    logger.setLevel(logging.INFO)
+    handler = logging.FileHandler(log_path, encoding="utf-8")
+    formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.propagate = False
+    return logger
 
 class HumanStrategy(AIStrategy):
     """
@@ -67,6 +86,10 @@ def get_human_input(game: TriominoGame, player: Player, renderer: GameRenderer) 
             
         if choice == 'd':
             # Draw
+            if can_play:
+                print("❌ You must play a tile if possible.")
+                input("Press Enter...")
+                continue
             if len(game.pool) == 0:
                 print("❌ Pool is empty!")
                 input("Press Enter...")
@@ -81,29 +104,34 @@ def get_human_input(game: TriominoGame, player: Player, renderer: GameRenderer) 
                 draws_made += 1
                 drawn_tile = player.hand[-1]
                 print(f"🀄 You drew: {drawn_tile}")
+                if LOGGER:
+                    LOGGER.info("Draw tile: player=%s draws_made=%s pool=%s",
+                                player.name, draws_made, len(game.pool))
                 # Check if playable?
             continue
             
         if choice == 'p':
             # Pass
+            if can_play:
+                print("❌ You must play a tile if possible.")
+                input("Press Enter...")
+                continue
             if len(game.pool) > 0 and draws_made < 3:
                  print("❌ You cannot pass yet! You must draw if you can't play.")
-                 # Exception: If you have a playable tile but refuse to play? 
-                 # Rules typically say you must play if able? Or is it strategic?
-                 # Let's enforce strict rules: Pass allowed only if (Pool Empty OR Max Draws) AND (No Moves)
-                 # Actually, usually if you can play, you must.
-                 pass
-            
-            # Simple check for now: Force logic? Or allow freedom?
-            # Let's allow passing if draws maxed or pool empty.
-            if len(game.pool) == 0 or draws_made >= 3:
-                print(f"⏭️  Passed turn.")
-                game.next_player()
-                return TurnResult(player, TurnAction.PASS, None, draws_made, -10, [], "Passed")
-            else:
-                 print("❌ Cannot pass yet (Draw more or Play).")
                  input("Press Enter...")
                  continue
+
+            if draws_made > 0:
+                points, event = calculate_draw_failure_penalty(draws_made)
+            else:
+                points, event = calculate_pass_penalty()
+            player.add_score(points)
+            print(f"⏭️  Passed turn ({points} pts).")
+            if LOGGER:
+                LOGGER.info("Pass: player=%s points=%s draws_made=%s",
+                            player.name, points, draws_made)
+            game.next_player()
+            return TurnResult(player, TurnAction.PASS, None, draws_made, points, [event], "Passed")
 
         # Try tile index
         try:
@@ -129,7 +157,13 @@ def get_human_input(game: TriominoGame, player: Player, renderer: GameRenderer) 
                 t_copy.rotation = p.rotation
                 # Ghost tile to draw
                 from src.models import PlacedTile
-                ghost = PlacedTile(t_copy, (p.row, p.col, p.orientation), player.id)
+                ghost = PlacedTile(
+                    tile=t_copy,
+                    q=p.row,
+                    r=p.col,
+                    player_id=game.players.index(player),
+                    orientation=p.orientation
+                )
                 options.append((ghost, i + 1)) # 1-based index
             
             # Show ghosts on GUI
@@ -158,6 +192,9 @@ def get_human_input(game: TriominoGame, player: Player, renderer: GameRenderer) 
                 # so it will clean up naturally.
                 
                 res = game.execute_place(player, tile, selected_placement, draws_made)
+                if LOGGER:
+                    LOGGER.info("Place tile: player=%s tile=%s points=%s",
+                                player.name, tile, res.points_earned)
                 game.next_player()
                 return res
                 
@@ -170,6 +207,9 @@ def get_human_input(game: TriominoGame, player: Player, renderer: GameRenderer) 
             print("❌ Invalid command. Use number to play, D to draw, P to pass.")
 
 def main():
+    global LOGGER
+    LOGGER = setup_logger()
+
     parser = argparse.ArgumentParser(description="Triominó - Human vs AI")
     parser.add_argument("--difficulty", type=str, default="greedy", choices=["random", "greedy", "human"],
                       help="Opponent type: 'human', 'greedy', or 'random'")
@@ -185,6 +225,10 @@ def main():
     """)
     
     player1_strategy = HumanStrategy()
+
+    if LOGGER:
+        LOGGER.info("CLI start difficulty=%s name1=%s name2=%s",
+                    args.difficulty, args.name, args.name2)
     
     if args.difficulty == "human":
         player2_strategy = HumanStrategy()

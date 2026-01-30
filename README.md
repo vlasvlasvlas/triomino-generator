@@ -1,133 +1,114 @@
-# 🎮 Triominó - War Games Edition
+# 🎮 Triominó Professional Edition
 
-**Simulador automático de partidas de Triominó** donde dos computadoras juegan entre sí siguiendo las reglas oficiales del juego.
+> **State-of-the-Art implementation of the Triominó board game, featuring a premium Pygame interface, robust Reinforcement Learning agents, and fully customizable aesthetics.**
 
----
-
-## 🎯 ¿Qué es esto?
-
-Un programa que simula partidas completas de Triominó entre 2 jugadores controlados por IA. Incluye:
-
-- ✅ Reglas 100% oficiales (tomadas de Wikipedia)
-- ✅ 56 fichas triangulares con valores 0-5
-- ✅ Sistema de puntuación completo con bonos y penalidades
-- ✅ Visualización animada en tiempo real
-- ✅ Estadísticas de múltiples partidas
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Python](https://img.shields.io/badge/python-3.9+-yellow.svg)
+![Status](https://img.shields.io/badge/status-stable-green.svg)
+![AI](https://img.shields.io/badge/AI-Reinforcement%20Learning-red)
 
 ---
 
-## 🚀 Instalación Rápida
+## ✨ Características Principales
 
+### 🖥️ Interfaz Gráfica SOTA (Pygame)
+*   **Visualización Nativa:** Adiós a la terminal. Juego renderizado a 60 FPS con animaciones fluidas y gráficos vectoriales.
+*   **Drag & Drop Feeling:** Sistema intuitivo "Click & Place". Selecciona tu ficha y las **"Sombras Guía" (Ghosts)** te mostrarán exactamente dónde puedes jugarla.
+*   **Personalización Total:**
+    *   **6 Temas de Fichas:** *Classic, Ocean, Sunset, Nature, Cyber, Pastel*.
+    *   **5 Fondos de Alto Contraste:** *Midnight, Deep Ocean, Forest, Void, Slate* (Optimizados para largas sesiones).
+
+### 🤖 Inteligencia Artificial y RL
+*   **Agentes Inteligentes:** Desde estrategias *Greedy* (codiciosas) hasta modelos entrenados con **Proximal Policy Optimization (PPO)**.
+*   **Pipeline de Entrenamiento Completo:** Entorno compatible con `Gymnasium` y `Stable-Baselines3` para entrenar tus propios agentes desde cero.
+*   **Modo Simulación:** Observa a dos IAs luchar entre sí a velocidad sobrehumana (o lenta para análisis).
+
+### 👥 Modos de Juego
+1.  **Human vs AI:** Desafía a la máquina.
+2.  **Human vs Human (Hotseat):** Modo local para dos jugadores con sistema **Anti-Cheat (Cortina)** que oculta la mano del oponente entre turnos.
+3.  **Bot vs Bot:** Relájate y mira cómo juegan las estrategias.
+
+---
+
+## 🚀 Inicio Rápido (Quick Start)
+
+Hemos simplificado todo con el script maestro `run.sh`.
+
+### 1. Instalación
 ```bash
-# 1. Clonar el repositorio
-git clone https://github.com/tu-usuario/triomino-generator.git
-cd triomino-generator
-
-# 2. Crear entorno virtual
+# Crear entorno virtual (recomendado)
 python3 -m venv venv
+source venv/bin/activate
 
-# 3. Activar entorno virtual
-source venv/bin/activate   # macOS/Linux
-# venv\Scripts\activate    # Windows
-
-# 4. Instalar dependencias
+# Instalar dependencias
 pip install -r requirements.txt
 ```
 
----
-
-## ▶️ Cómo Ejecutar
-
-### Opción 1: Con visualización (recomendado)
+### 2. Jugar (GUI)
+Lanza la interfaz gráfica profesional:
 ```bash
-python3 main.py
+./run.sh
 ```
-Verás el tablero animado con las fichas colocándose en tiempo real.
+*Desde el menú principal podrás elegir Modo, Dificultad, Nombres y Colores.*
 
-### Opción 2: Modo rápido (solo estadísticas)
+### 3. Otros Comandos
 ```bash
-python3 main.py --fast
-```
-Sin gráficos, muestra solo los resultados finales.
+# Entrenar un nuevo agente de RL (Training Loop)
+./run.sh train
 
-### Opciones adicionales
-
-| Opción | Descripción | Ejemplo |
-|--------|-------------|---------|
-| `--matches N` | Cantidad de partidas | `--matches 10` |
-| `--fast` | Sin visualización | `--fast` |
-| `--seed N` | Resultado reproducible | `--seed 42` |
-| `--delay N` | Velocidad de animación | `--delay 0.1` |
-
-### Ejemplos
-
-```bash
-# 10 partidas con visualización
-python3 main.py --matches 10
-
-# 20 partidas rápidas
-python3 main.py --fast --matches 20
-
-# Partida reproducible
-python3 main.py --seed 42
-
-# Animación más rápida
-python3 main.py --delay 0.1
+# Jugar en modo Legacy (Terminal/ASCII)
+./run.sh cli
 ```
 
 ---
 
-## 📊 Reglas de Puntuación
+## 🎮 Guía de Interfaz
 
-| Acción | Puntos |
-|--------|--------|
-| Colocar ficha | Suma de los 3 valores |
-| Abrir con triple (ej: 3-3-3) | +10 bonus |
-| Abrir con 0-0-0 | +40 bonus |
-| Completar hexágono | +50 bonus |
-| Formar puente | +40 bonus |
-| Robar del pozo | -5 por ficha |
-| No poder jugar tras 3 robos | -25 adicional |
-| Pasar (pozo vacío) | -10 |
-| Ganar la ronda | +25 + suma de fichas del oponente |
+### Controles
+*   **Mouse Izquierdo:**
+    *   **Click en Mano:** Seleccionar ficha (se ilumina en dorado).
+    *   **Click en Tablero:** Colocar ficha seleccionada sobre una **"Sombra Guía" (Ghost tile)**.
+    *   **Botones:** Usar los botones [DRAW] y [PASS] en pantalla.
+*   **Navegación:** Todo el menú es controlable con el mouse.
 
-**¿Cómo ganar?** El primero en llegar a 400 puntos activa la "ronda final". Al terminar esa ronda, gana quien tenga más puntos.
+### Modos de Visualización
+En el **Menú Principal**, usa los selectores circulares para cambiar la estética del juego *antes* de empezar. Tus preferencias se aplican instantáneamente al tablero.
 
 ---
 
-## 📁 Estructura del Proyecto
+## 🧠 Arquitectura Técnica
 
+### Estructura del Proyecto
 ```
-triomino-generator/
-├── main.py              # ← Punto de entrada (ejecutar este)
+.
+├── models/             # Checkpoints de modelos entrenados (RL)
 ├── src/
-│   ├── models/          # Fichas, jugadores, tablero
-│   ├── engine/          # Motor del juego y reglas
-│   ├── ai/              # Estrategias de IA
-│   └── visualization/   # Renderizado con matplotlib
-├── RULES.md             # Reglas oficiales en español
-├── requirements.txt     # Dependencias (numpy, matplotlib)
-└── README.md            # Este archivo
+│   ├── ai/             # Estrategias (Greedy, Random, HumanWrapper)
+│   ├── engine/         # Motor lógico del juego (Reglas, Validaciones, Puntajes)
+│   ├── gui/            # NUEVO: Motor Gráfico Pygame (SOTA)
+│   │   ├── main.py     # Entrypoint de la aplicación gráfica y loop principal
+│   │   ├── assets.py   # Gestión de recursos, fuentes y paletas de colores
+│   │   └── pygame_board.py # Renderizado geométrico de triángulos
+│   ├── models/         # Clases de datos (Triomino, Board, Player)
+│   └── rl/             # Pipeline de Reinforcement Learning (Env, Train)
+├── run.sh              # Script maestro de ejecución
+└── requirements.txt    # Dependencias del proyecto
 ```
 
----
-
-## 📖 Reglas Oficiales
-
-Ver [RULES.md](RULES.md) para el reglamento completo.
-
-Fuente: [Wikipedia - Triominoes](https://en.wikipedia.org/wiki/Triominoes)
+### Reinforcement Learning (RL) Details
+El proyecto implementa un entorno personalizado de Gymnasium (`TriominoEnv`) que expone el estado del juego como un vector de observaciones y utiliza **Action Masking** para garantizar movimientos válidos.
+*   **Algoritmo:** MaskablePPO (`sb3-contrib`).
+*   **Rewards:** Scoring denso basado en reglas del juego + rewards por victorias.
 
 ---
 
-## 🛠️ Requisitos
+## 🛠️ Troubleshooting
 
-- Python 3.9 o superior
-- numpy
-- matplotlib
+**Problema:** `box2d-py` error durante instalación.
+**Solución:** Este proyecto NO requiere box2d. Asegúrate de usar el `requirements.txt` provisto que está limpio de dependencias innecesarias.
+
+**Problema:** La ventana se cierra inmediatamente.
+**Solución:** Ejecuta desde la terminal `./run.sh` para ver el log de errores. Asegúrate de estar en el entorno virtual.
 
 ---
-
-## 📄 Licencia
-
-MIT License
+*Desarrollado con ❤️ y Python.*

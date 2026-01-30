@@ -1,0 +1,34 @@
+{
+  "game": {
+    "target_score": 400
+  },
+  "simulation": {
+    "matches": 5,
+    "seed": null,
+    "fast": false,
+    "delay": 0.3
+  },
+  "players": [
+    {
+      "name": "CPU-Alpha",
+      "strategy": "greedy"
+    },
+    {
+      "name": "CPU-Beta",
+      "strategy": "greedy"
+    }
+  ],
+  "logging": {
+    "enabled": true,
+    "run_dir": "runs",
+    "save_stats": true
+  },
+  "rl": {
+    "enabled": false,
+    "iterations": 100,
+    "episodes_per_iteration": 100,
+    "save_every": 10,
+    "model_dir": "models",
+    "log_dir": "runs/rl"
+  }
+}

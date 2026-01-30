@@ -6,9 +6,13 @@ Runs multiple games between computer players and collects statistics.
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Optional, Callable
+from datetime import datetime
+from pathlib import Path
+import json
 import time
 
 from src.engine.game import TriominoGame, GameResult, RoundResult, TurnResult
+from src.ai.strategies import get_strategy, AIStrategy
 
 
 @dataclass
@@ -75,7 +79,10 @@ class MatchSimulator:
     
     def __init__(self, num_matches: int = 5,
                  player_names: List[str] = None,
-                 target_score: int = 400):
+                 target_score: int = 400,
+                 strategy_names: Optional[List[str]] = None,
+                 log_enabled: bool = False,
+                 log_dir: str = "runs"):
         """
         Initialize the match simulator.
         
@@ -90,6 +97,13 @@ class MatchSimulator:
         self.num_matches = num_matches
         self.player_names = player_names
         self.target_score = target_score
+        if strategy_names is None:
+            strategy_names = ["greedy"] * len(self.player_names)
+        if len(strategy_names) != len(self.player_names):
+            raise ValueError("Number of strategies must match number of players")
+        self.strategy_names = strategy_names
+        self.log_enabled = log_enabled
+        self.log_dir = log_dir
         
         self.stats = MatchStats()
         self.results: List[MatchResult] = []
@@ -115,10 +129,12 @@ class MatchSimulator:
         start_time = time.time()
         turns_count = 0
         
+        strategies: List[AIStrategy] = [get_strategy(name) for name in self.strategy_names]
         game = TriominoGame(
             player_names=self.player_names,
             target_score=self.target_score,
-            seed=seed
+            seed=seed,
+            strategies=strategies
         )
         
         # Set up callbacks
@@ -193,7 +209,43 @@ class MatchSimulator:
             print(f"   Duration: {result.duration_seconds:.2f}s")
         
         self.stats.print_summary()
+        if self.log_enabled:
+            self._write_log(base_seed)
         return self.stats
+
+    def _write_log(self, base_seed: Optional[int]) -> None:
+        """Persist run stats to disk as JSON."""
+        payload = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "matches": self.num_matches,
+            "base_seed": base_seed,
+            "players": self.player_names,
+            "strategies": self.strategy_names,
+            "target_score": self.target_score,
+            "stats": {
+                "wins_per_player": self.stats.wins_per_player,
+                "total_rounds": self.stats.total_rounds,
+                "avg_rounds_per_match": self.stats.avg_rounds_per_match,
+                "highest_score": self.stats.highest_score,
+                "highest_scorer": self.stats.highest_scorer,
+            },
+            "results": [
+                {
+                    "winner": r.game_result.winner.name,
+                    "final_scores": r.game_result.final_scores,
+                    "rounds_played": r.game_result.rounds_played,
+                    "duration_seconds": r.duration_seconds,
+                    "turns_played": r.turns_played,
+                }
+                for r in self.results
+            ],
+        }
+
+        log_path = Path(self.log_dir)
+        log_path.mkdir(parents=True, exist_ok=True)
+        filename = f"run-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.json"
+        with (log_path / filename).open("w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, ensure_ascii=True)
 
 
 def quick_simulation(num_matches: int = 5, seed: int = None) -> MatchStats:

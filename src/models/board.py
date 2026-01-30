@@ -220,10 +220,86 @@ class GameBoard:
             return False
         
         my_edge_idx, adj_edge_idx = edge_indices
-        my_edge = tile.get_edge(my_edge_idx)
-        adj_edge = adj_tile.tile.get_edge(adj_edge_idx)
-        
-        return my_edge.matches(adj_edge)
+        my_edge = tile.get_edge(my_edge_idx, my_pos[2])
+        adj_edge = adj_tile.tile.get_edge(adj_edge_idx, adj_pos[2])
+    
+        # IMPORTANT: In this grid system, shared edges between adjacent UP/DOWN
+        # triangles traverse the shared boundary in the SAME direction.
+        # So we must check for equality, not reversal.
+        return my_edge.v1 == adj_edge.v1 and my_edge.v2 == adj_edge.v2
+
+    def _get_vertices_key(self, row: int, col: int, orientation: str) -> List[Tuple[float, float]]:
+        """Return rounded vertices for a given position in the grid."""
+        vertices = get_triangle_vertices(row, col, orientation)
+        return [_round_vertex((vx, vy)) for vx, vy in vertices]
+
+    def _iter_tiles_with_vertex(self, vertex: Tuple[float, float]) -> List[Tuple[PlacedTile, int]]:
+        """Return all placed tiles that include the given vertex (with local vertex index)."""
+        matches: List[Tuple[PlacedTile, int]] = []
+        for pos, placed in self.tiles.items():
+            verts = self._get_vertices_key(*pos)
+            for idx, v in enumerate(verts):
+                if v == vertex:
+                    matches.append((placed, idx))
+        return matches
+
+    def _count_tiles_at_vertex(self, vertex: Tuple[float, float]) -> int:
+        """Count how many placed tiles share a given vertex."""
+        return len(self._iter_tiles_with_vertex(vertex))
+
+    def _evaluate_bonuses(self, tile: Triomino, row: int, col: int,
+                          orientation: str) -> Tuple[int, int]:
+        """
+        Evaluate bonuses for a hypothetical placement.
+
+        Returns:
+            (bridge_count, hexagon_count)
+        """
+        vertices = self._get_vertices_key(row, col, orientation)
+        values = tile.get_values(orientation)
+
+        # Hexagon: complete 6 triangles around a shared vertex
+        hexagon_count = 0
+        for v in vertices:
+            if self._count_tiles_at_vertex(v) + 1 == 6:
+                hexagon_count += 1
+
+        # Bridge: edge match + opposite vertex match (each edge can score a bridge)
+        bridge_count = 0
+        adjacent = self.get_adjacent_tiles(row, col, orientation)
+        for adj_pos, adj_tile in adjacent.items():
+            edge_indices = get_shared_edge_index((row, col, orientation), adj_pos)
+            if edge_indices is None:
+                continue
+            my_edge_idx, _ = edge_indices
+
+            # Only consider edges that actually match
+            if not self._check_edge_match(tile, (row, col, orientation), adj_tile, adj_pos):
+                continue
+
+            opposite_vertex_idx = (my_edge_idx + 2) % 3
+            opposite_vertex = vertices[opposite_vertex_idx]
+            opposite_value = values[opposite_vertex_idx]
+
+            # Look for any existing tile that matches this vertex value
+            for placed, v_idx in self._iter_tiles_with_vertex(opposite_vertex):
+                if placed.values[v_idx] == opposite_value:
+                    bridge_count += 1
+                    break
+
+        return bridge_count, hexagon_count
+
+    def _check_vertex_match(self, tile: Triomino, row: int, col: int,
+                             orientation: str) -> bool:
+        """Ensure all touching vertices have matching values."""
+        vertices = self._get_vertices_key(row, col, orientation)
+        values = tile.get_values(orientation)
+
+        for idx, vertex in enumerate(vertices):
+            for placed, v_idx in self._iter_tiles_with_vertex(vertex):
+                if placed.values[v_idx] != values[idx]:
+                    return False
+        return True
     
     def find_valid_placements(self, tile: Triomino) -> List[ValidPlacement]:
         """Find all valid positions and rotations for a tile."""
@@ -248,15 +324,19 @@ class GameBoard:
                         break
                 
                 if all_match:
+                    if not self._check_vertex_match(tile, row, col, orientation):
+                        continue
                     edges_matched = len(adjacent)
-                    is_bridge = edges_matched >= 2
+                    bridge_count, hexagon_count = self._evaluate_bonuses(
+                        tile, row, col, orientation
+                    )
                     
                     valid.append(ValidPlacement(
                         row=row, col=col, orientation=orientation,
                         rotation=rotation,
                         edges_matched=edges_matched,
-                        is_bridge=is_bridge,
-                        is_hexagon=False  # TODO: implement
+                        bridge_count=bridge_count,
+                        hexagon_count=hexagon_count
                     ))
         
         tile.rotation = 0
@@ -279,6 +359,9 @@ class GameBoard:
             for adj_pos, adj_tile in adjacent.items():
                 if not self._check_edge_match(tile, pos, adj_tile, adj_pos):
                     return PlacementResult(success=False, message="Edges don't match")
+
+            if not self._check_vertex_match(tile, row, col, orientation):
+                return PlacementResult(success=False, message="Vertex values don't match")
         
         # Valid placement
         tile.rotation = rotation
@@ -293,13 +376,18 @@ class GameBoard:
         self.tiles[pos] = placed
         self._move_history.append(placed)
         
-        # Calculate bonus
-        edges_matched = len(self.get_adjacent_tiles(row, col, orientation))
-        is_bridge = edges_matched >= 2
-        
-        bonus_type = BonusType.BRIDGE if is_bridge else BonusType.NONE
-        bonus_points = 40 if is_bridge else 0
+        # Calculate bonuses
+        bridge_count, hexagon_count = self._evaluate_bonuses(tile, row, col, orientation)
         base_points = tile.sum_value
+        bonus_points = (bridge_count * 40) + (hexagon_count * 50)
+        if hexagon_count >= 2:
+            bonus_type = BonusType.DOUBLE_HEXAGON
+        elif hexagon_count == 1:
+            bonus_type = BonusType.HEXAGON
+        elif bridge_count > 0:
+            bonus_type = BonusType.BRIDGE
+        else:
+            bonus_type = BonusType.NONE
         
         return PlacementResult(
             success=True,
@@ -308,6 +396,8 @@ class GameBoard:
             bonus_type=bonus_type,
             bonus_points=bonus_points,
             total_points=base_points + bonus_points,
+            bridge_count=bridge_count,
+            hexagon_count=hexagon_count,
             message=f"Placed {tile} at ({row}, {col}, {orientation})"
         )
     
@@ -339,6 +429,8 @@ class GameBoard:
             base_points=base_points,
             bonus_points=bonus_points,
             total_points=base_points + bonus_points,
+            bridge_count=0,
+            hexagon_count=0,
             message=f"First tile: {tile}"
         )
     

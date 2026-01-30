@@ -25,7 +25,7 @@ class ScoredMove:
     
     def __repr__(self) -> str:
         bonus = f" +{self.bonus_score}" if self.bonus_score else ""
-        return f"Move({self.tile} → ({self.placement.q},{self.placement.r}){bonus})"
+        return f"Move({self.tile} → ({self.placement.row},{self.placement.col}){bonus})"
 
 
 class AIStrategy(ABC):
@@ -54,11 +54,7 @@ class AIStrategy(ABC):
         for tile in player.hand:
             placements = board.find_valid_placements(tile)
             for placement in placements:
-                bonus = 0
-                if placement.is_hexagon:
-                    bonus = 50
-                elif placement.is_bridge:
-                    bonus = 40
+                bonus = (placement.hexagon_count * 50) + (placement.bridge_count * 40)
                 
                 moves.append(ScoredMove(
                     tile=tile,
@@ -117,9 +113,9 @@ class BalancedStrategy(AIStrategy):
                 score += 2
             
             # Bonus for hexagon/bridge (these are valuable)
-            if move.placement.is_hexagon:
+            if move.placement.hexagon_count > 0:
                 score += 10
-            elif move.placement.is_bridge:
+            elif move.placement.bridge_count > 0:
                 score += 5
             
             scored.append((score, move))

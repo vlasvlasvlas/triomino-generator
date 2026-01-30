@@ -19,6 +19,7 @@ from src.engine.rules import (
     calculate_round_win_bonus, calculate_blocked_win_bonus,
     get_initial_tile_count, MAX_DRAWS_PER_TURN, TARGET_SCORE
 )
+from src.ai.strategies import AIStrategy, get_strategy
 
 
 class TurnAction(Enum):
@@ -64,11 +65,17 @@ class TriominoGame:
     
     def __init__(self, player_names: List[str] = None, 
                  target_score: int = TARGET_SCORE,
-                 seed: int = None):
+                 seed: int = None,
+                 strategies: Optional[List[AIStrategy]] = None):
         if player_names is None:
             player_names = ["Computer 1", "Computer 2"]
         
         self.players = [Player(name=name, is_computer=True) for name in player_names]
+        if strategies is None:
+            strategies = [get_strategy("greedy") for _ in self.players]
+        if len(strategies) != len(self.players):
+            raise ValueError("Number of strategies must match number of players")
+        self.strategies = strategies
         self.target_score = target_score
         self.seed = seed
         
@@ -77,6 +84,7 @@ class TriominoGame:
         self.current_player_idx = 0
         self.round_number = 0
         self.is_final_round = False
+        self.final_round_triggered = False
         self.game_over = False
         
         self._on_tile_placed: Optional[Callable] = None
@@ -140,24 +148,13 @@ class TriominoGame:
         )
     
     def find_best_move(self, player: Player) -> Optional[tuple[Triomino, ValidPlacement]]:
-        """Find best valid move (greedy strategy)."""
-        best_move = None
-        best_score = -1
-        
-        for tile in player.hand:
-            placements = self.board.find_valid_placements(tile)
-            for placement in placements:
-                score = tile.sum_value
-                if placement.is_bridge:
-                    score += 40
-                if placement.is_hexagon:
-                    score += 50
-                
-                if score > best_score:
-                    best_score = score
-                    best_move = (tile, placement)
-        
-        return best_move
+        """Find best valid move using the player's configured strategy."""
+        idx = self.players.index(player)
+        strategy = self.strategies[idx]
+        move = strategy.choose_move(player, self.board)
+        if not move:
+            return None
+        return (move.tile, move.placement)
     
     def can_player_move(self, player: Player) -> bool:
         for tile in player.hand:
@@ -165,6 +162,45 @@ class TriominoGame:
                 return True
         return False
     
+    
+    def execute_place(self, player: Player, tile: Triomino, placement: ValidPlacement, draws_made: int = 0) -> TurnResult:
+        """Execute a placement action atomatically."""
+        player.play_tile(tile)
+        # Ensure rotation is set correctly on the tile copy
+        tile.rotation = placement.rotation
+        
+        result = self.board.place_tile(
+            tile=tile,
+            row=placement.row,
+            col=placement.col,
+            orientation=placement.orientation,
+            rotation=placement.rotation,
+            player_id=self.players.index(player)
+        )
+        
+        points, events = calculate_placement_score(result, draws_made)
+        player.add_score(points)
+        
+        if self._on_tile_placed:
+            self._on_tile_placed(result)
+        
+        return TurnResult(
+            player=player,
+            action=TurnAction.PLACE_TILE,
+            tile_placed=result.tile,
+            tiles_drawn=draws_made,
+            points_earned=points,
+            events=events,
+            message=f"{player.name} places {tile}"
+        )
+        
+    def execute_draw(self, player: Player) -> int:
+        """Draw a tile from pool. Returns count drawn (0 or 1)."""
+        if self.pool:
+            player.draw_tiles(self.pool, 1)
+            return 1
+        return 0
+
     def play_turn(self) -> TurnResult:
         player = self.current_player
         draws_made = 0
@@ -174,37 +210,13 @@ class TriominoGame:
             
             if move:
                 tile, placement = move
-                player.play_tile(tile)
-                tile.rotation = placement.rotation
-                
-                result = self.board.place_tile(
-                    tile=tile,
-                    row=placement.row,
-                    col=placement.col,
-                    orientation=placement.orientation,
-                    rotation=placement.rotation,
-                    player_id=self.current_player_idx
-                )
-                
-                points, events = calculate_placement_score(result, draws_made)
-                player.add_score(points)
-                
-                if self._on_tile_placed:
-                    self._on_tile_placed(result)
-                
-                return TurnResult(
-                    player=player,
-                    action=TurnAction.PLACE_TILE,
-                    tile_placed=result.tile,
-                    tiles_drawn=draws_made,
-                    points_earned=points,
-                    events=events,
-                    message=f"{player.name} places {tile}"
-                )
+                return self.execute_place(player, tile, placement, draws_made)
+
             
             if self.pool and draws_made < MAX_DRAWS_PER_TURN:
-                player.draw_tiles(self.pool, 1)
-                draws_made += 1
+                count = self.execute_draw(player)
+                draws_made += count
+
                 continue
             
             break
@@ -322,16 +334,19 @@ class TriominoGame:
     
     def play_game(self) -> GameResult:
         while not self.game_over:
+            if self.final_round_triggered:
+                self.is_final_round = True
+
             round_result = self.play_round()
             
-            if self.check_game_end():
-                if not self.is_final_round:
-                    self.is_final_round = True
-                else:
-                    self.game_over = True
-            
-            if self.is_final_round and self.round_number > 0:
+            # If we just played the final round, the game ends now
+            if self.is_final_round:
                 self.game_over = True
+                break
+
+            # Trigger final round if someone reaches target
+            if self.check_game_end():
+                self.final_round_triggered = True
         
         winner = max(self.players, key=lambda p: p.score)
         

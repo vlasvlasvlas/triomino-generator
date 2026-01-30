@@ -51,7 +51,7 @@ class Triomino:
     def __init__(self, a: int, b: int, c: int):
         """
         Create a triomino with values a, b, c.
-        Values are stored in canonical form (clockwise ascending order).
+        Values are stored as provided; deck generation ensures canonical ordering.
         """
         if not all(0 <= v <= 5 for v in (a, b, c)):
             raise ValueError(f"Values must be 0-5, got {a}, {b}, {c}")
@@ -74,15 +74,16 @@ class Triomino:
 
     def get_values(self, orientation: str = "up") -> Tuple[int, int, int]:
         """
-        Get oriented vertex values for placement.
-
-        For 'up' orientation, values map directly to (v0, v1, v2).
-        For 'down', the triangle is rotated 180° on the board, which swaps v1/v2.
+        Get vertex values considering rotation.
+        
+        For triangles at the same grid position:
+        - UP: v0=top, v1=bottom-left, v2=bottom-right
+        - DOWN: v0=bottom, v1=top-left, v2=top-right
+        
+        Vertices 1 and 2 are at the SAME geometric positions for UP and DOWN,
+        so no swap is needed. The values map directly.
         """
-        v0, v1, v2 = self.values
-        if orientation == "down":
-            return (v0, v2, v1)
-        return (v0, v1, v2)
+        return self.values
     
     @property
     def rotation(self) -> int:
@@ -182,15 +183,23 @@ class Triomino:
         v = self.values
         return f"{v[0]}-{v[1]}-{v[2]}"
 
-
 @dataclass
 class PlacedTile:
-    """A tile that has been placed on the board at a specific position."""
+    """A tile that has been placed on the board at a specific position.
+    
+    IMPORTANT: The tile is copied at construction time to freeze its rotation.
+    This prevents corruption when the original tile's rotation changes during
+    subsequent move searches.
+    """
     tile: Triomino
     q: int  # Row in new system
     r: int  # Col in new system
     player_id: Optional[int] = None
     orientation: str = 'up'  # 'up' or 'down'
+    
+    def __post_init__(self):
+        # Make a copy of the tile to freeze its current rotation state
+        self.tile = self.tile.copy()
     
     @property
     def row(self) -> int:
@@ -215,3 +224,4 @@ class PlacedTile:
         arrow = "▲" if self.orientation == 'up' else "▼"
         player = f" P{self.player_id}" if self.player_id is not None else ""
         return f"Placed({self.tile} at ({self.q},{self.r}){arrow}{player})"
+

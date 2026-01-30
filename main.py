@@ -9,17 +9,24 @@ Ejecutar:
     python main.py --matches 10 # Simular 10 partidas
     python main.py --fast       # Sin visualización (solo estadísticas)
     python main.py --seed 42    # Seed fijo para reproducibilidad
+    python main.py --config config/default.json  # Config centralizado
 """
 import argparse
 import sys
+from typing import List, Optional
 
 from src.engine import TriominoGame, MatchSimulator
 from src.visualization import visualize_game, GameRenderer
+from src.config import load_config
+from src.ai.strategies import get_strategy, AIStrategy
 
 
 def run_visualized_simulation(num_matches: int = 5, 
                                animation_delay: float = 0.3,
-                               seed: int = None):
+                               seed: int = None,
+                               player_names: Optional[List[str]] = None,
+                               strategies: Optional[List[AIStrategy]] = None,
+                               target_score: int = 400):
     """
     Run matches with live visualization.
     
@@ -33,9 +40,16 @@ def run_visualized_simulation(num_matches: int = 5,
     print("\n" + "🎮" * 20)
     print("   TRIOMINÓ - WAR GAMES EDITION")
     print("🎮" * 20)
-    print(f"\n🤖 Computer 1 (Red) vs Computer 2 (Blue)")
+    if player_names is None:
+        player_names = ['CPU-Alpha', 'CPU-Beta']
+    if strategies is None:
+        strategies = [get_strategy("greedy") for _ in player_names]
+    if len(strategies) != len(player_names):
+        raise ValueError("Number of strategies must match number of players")
+
+    print(f"\n🤖 {' vs '.join(player_names)}")
     print(f"📊 Matches: {num_matches}")
-    print(f"🎯 Target: 400 points")
+    print(f"🎯 Target: {target_score} points")
     print("-" * 50)
     
     renderer = GameRenderer()
@@ -43,7 +57,7 @@ def run_visualized_simulation(num_matches: int = 5,
     renderer.animation_delay = animation_delay
     
     stats = {
-        'wins': {'🔴 CPU-Alpha': 0, '🔵 CPU-Beta': 0},
+        'wins': {name: 0 for name in player_names},
         'total_rounds': 0,
         'highest_score': 0,
         'highest_scorer': ''
@@ -54,8 +68,10 @@ def run_visualized_simulation(num_matches: int = 5,
         
         match_seed = (seed + match_num) if seed else None
         game = TriominoGame(
-            player_names=['🔴 CPU-Alpha', '🔵 CPU-Beta'],
-            seed=match_seed
+            player_names=player_names,
+            seed=match_seed,
+            target_score=target_score,
+            strategies=strategies
         )
         
         # Set up visualization callbacks
@@ -106,7 +122,12 @@ def run_visualized_simulation(num_matches: int = 5,
     plt.show()
 
 
-def run_fast_simulation(num_matches: int = 5, seed: int = None):
+def run_fast_simulation(num_matches: int = 5, seed: int = None,
+                        player_names: Optional[List[str]] = None,
+                        strategy_names: Optional[List[str]] = None,
+                        target_score: int = 400,
+                        log_enabled: bool = False,
+                        log_dir: str = "runs"):
     """
     Run matches without visualization (faster).
     
@@ -114,9 +135,15 @@ def run_fast_simulation(num_matches: int = 5, seed: int = None):
         num_matches: Number of games to play
         seed: Random seed for reproducibility
     """
+    if player_names is None:
+        player_names = ['CPU-Alpha', 'CPU-Beta']
     simulator = MatchSimulator(
         num_matches=num_matches,
-        player_names=['🔴 CPU-Alpha', '🔵 CPU-Beta']
+        player_names=player_names,
+        target_score=target_score,
+        strategy_names=strategy_names,
+        log_enabled=log_enabled,
+        log_dir=log_dir
     )
     
     stats = simulator.run_simulation(base_seed=seed)
@@ -140,13 +167,14 @@ Examples:
     parser.add_argument(
         '-m', '--matches',
         type=int,
-        default=5,
-        help='Number of matches to simulate (default: 5)'
+        default=None,
+        help='Number of matches to simulate'
     )
     
     parser.add_argument(
         '-f', '--fast',
         action='store_true',
+        default=None,
         help='Fast mode - no visualization'
     )
     
@@ -160,23 +188,59 @@ Examples:
     parser.add_argument(
         '-d', '--delay',
         type=float,
-        default=0.3,
-        help='Animation delay in seconds (default: 0.3)'
+        default=None,
+        help='Animation delay in seconds'
+    )
+
+    parser.add_argument(
+        '-c', '--config',
+        type=str,
+        default=None,
+        help='Path to config JSON (default: config/default.json)'
     )
     
     args = parser.parse_args()
     
     try:
-        if args.fast:
+        config = load_config(args.config)
+        simulation = config.get("simulation", {})
+        logging_cfg = config.get("logging", {})
+        players = config.get("players", [])
+        if not players:
+            players = [
+                {"name": "CPU-Alpha", "strategy": "greedy"},
+                {"name": "CPU-Beta", "strategy": "greedy"}
+            ]
+        player_names = [p.get("name", f"Player {i+1}") for i, p in enumerate(players)]
+        strategy_names = [p.get("strategy", "greedy") for p in players]
+        strategies = [get_strategy(name) for name in strategy_names]
+
+        matches = args.matches if args.matches is not None else simulation.get("matches", 5)
+        seed = args.seed if args.seed is not None else simulation.get("seed")
+        delay = args.delay if args.delay is not None else simulation.get("delay", 0.3)
+        fast = args.fast if args.fast is not None else simulation.get("fast", False)
+        target_score = config.get("game", {}).get("target_score", 400)
+        log_enabled = logging_cfg.get("enabled", False)
+        log_dir = logging_cfg.get("run_dir", "runs")
+
+        if fast:
             run_fast_simulation(
-                num_matches=args.matches,
-                seed=args.seed
+                num_matches=matches,
+                seed=seed,
+                player_names=player_names,
+                strategy_names=strategy_names,
+                target_score=target_score,
+                log_enabled=log_enabled,
+                log_dir=log_dir
             )
         else:
             run_visualized_simulation(
-                num_matches=args.matches,
-                animation_delay=args.delay,
-                seed=args.seed
+                num_matches=matches,
+                animation_delay=delay,
+                seed=seed,
+                player_names=player_names,
+                strategies=strategies,
+                target_score=target_score
             )
     except KeyboardInterrupt:
         print("\n\n👋 Simulation cancelled by user.")

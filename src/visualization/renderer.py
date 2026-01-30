@@ -91,7 +91,7 @@ class GameRenderer:
         self.ax_board.add_patch(poly)
         
         # Draw numbers
-        values = placed_tile.tile.values
+        values = placed_tile.values
         center = vertices.mean(axis=0)
         
         for i, (vx, vy) in enumerate(vertices):
@@ -108,6 +108,46 @@ class GameRenderer:
             text.set_path_effects([
                 pe.withStroke(linewidth=2, foreground='black')
             ])
+
+    def draw_ghost_placements(self, placed_list: List[Tuple[PlacedTile, int]]):
+        """
+        Draw semi-transparent 'ghost' tiles to show valid options to the user.
+        placed_list: List of (PlacedTile, label_index)
+        """
+        # Remove any existing ghosts (identified by specific zorder or tag? 
+        # For simplicity, we assume we redraw board to clear, but here we just add patches)
+        # To clear ghosts specifically would require tracking them. 
+        # Easier strategy: Main loop redraws board (clearing everything), then draws ghosts.
+        
+        for p_tile, label in placed_list:
+            row, col, ori = p_tile.position
+            vertices = get_triangle_vertices(row, col, ori)
+            
+            # Draw faded triangle
+            poly = Polygon(
+                vertices,
+                facecolor='#FFFF00', # Yellow highlight
+                edgecolor='white',
+                linewidth=2,
+                alpha=0.4,
+                zorder=10
+            )
+            self.ax_board.add_patch(poly)
+            
+            # Draw Selection Label (Values: 1, 2, 3...)
+            center = vertices.mean(axis=0)
+            text = self.ax_board.text(
+                center[0], center[1], str(label),
+                fontsize=14, fontweight='bold',
+                color='#ffffff', ha='center', va='center',
+                zorder=11
+            )
+            text.set_path_effects([
+                pe.withStroke(linewidth=3, foreground='black')
+            ])
+            
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
     
     def draw_board(self, board: GameBoard, animate: bool = True):
         """Draw complete board."""

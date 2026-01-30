@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
-from src.models.board import PlacementResult, BonusType
+from src.models.board import PlacementResult
 
 
 class ScoreType(Enum):
@@ -130,24 +130,26 @@ def calculate_placement_score(result: PlacementResult,
         f"Tile placed"
     ))
     
-    # Bonus points
-    if result.bonus_type == BonusType.HEXAGON:
+    # Bonus points (can stack)
+    if result.hexagon_count == 1:
         events.append(ScoreEvent(
             ScoreType.HEXAGON_COMPLETE,
             50,
             "Hexagon completed!"
         ))
-    elif result.bonus_type == BonusType.DOUBLE_HEXAGON:
+    elif result.hexagon_count >= 2:
+        points = 50 * result.hexagon_count
         events.append(ScoreEvent(
             ScoreType.DOUBLE_HEXAGON,
-            100,
-            "Double hexagon completed!"
+            points,
+            f"{result.hexagon_count} hexagons completed!"
         ))
-    elif result.bonus_type == BonusType.BRIDGE:
+    if result.bridge_count > 0:
+        points = 40 * result.bridge_count
         events.append(ScoreEvent(
             ScoreType.BRIDGE_FORMED,
-            40,
-            "Bridge formed!"
+            points,
+            f"Bridge formed x{result.bridge_count}"
         ))
     
     # Draw penalties
@@ -167,12 +169,13 @@ def calculate_draw_failure_penalty(draws_made: int) -> tuple[int, ScoreEvent]:
     """
     Calculate penalty when player can't play after drawing.
     
-    If player drew 3 tiles and still can't play: -25 penalty
+    If player drew 3 tiles and still can't play: -5 per draw + -25 additional
     """
     if draws_made >= MAX_DRAWS_PER_TURN:
-        return (POINTS[ScoreType.THREE_DRAW_FAIL_PENALTY], ScoreEvent(
+        penalty = (draws_made * POINTS[ScoreType.DRAW_PENALTY]) + POINTS[ScoreType.THREE_DRAW_FAIL_PENALTY]
+        return (penalty, ScoreEvent(
             ScoreType.THREE_DRAW_FAIL_PENALTY,
-            POINTS[ScoreType.THREE_DRAW_FAIL_PENALTY],
+            penalty,
             "Cannot play after 3 draws"
         ))
     else:

@@ -85,7 +85,7 @@ El entrenamiento muestra métricas explicadas cada 10 episodios:
 ## Instalación
 
 ```bash
-git clone https://github.com/tu-usuario/triomino-generator.git
+git clone https://github.com/vlasvlasvlas/triomino-generator.git
 cd triomino-generator
 python3 -m venv venv
 source venv/bin/activate

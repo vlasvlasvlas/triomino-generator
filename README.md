@@ -12,7 +12,7 @@ Un juego de Triominó con interfaz gráfica en Pygame y agentes de RL entrenable
 ## Modos de Juego
 
 ### Humano vs IA
-Jugás contra una IA con dificultad seleccionable (Greedy, Random, o un modelo PPO entrenado).
+Jugás contra una IA con dificultad seleccionable (Greedy, Balanced, Defensive, Random, o un modelo PPO entrenado).
 
 ### Humano vs Humano (Hotseat)
 Dos jugadores en la misma computadora. Entre turnos aparece una "cortina" que oculta la mano del jugador anterior para evitar trampas.
@@ -23,12 +23,27 @@ Observá cómo dos IAs juegan entre sí. Útil para:
 - Generar datos de entrenamiento
 - Modo "infinito" que reinicia automáticamente al terminar cada partida
 
-**Controles especiales en Bot vs Bot:**
-- `↑/↓` - Aumentar/disminuir velocidad de juego
-- `N` - Activar **Modo Noche**: fondo semi-transparente con grilla visible, ideal para ver mejor las fichas
-- `G` - Activar **Ghost Trails**: muestra rastros de partidas anteriores como fichas fantasma
+Incluye panel de control en pantalla con:
+- Tempo actual (BPM y milisegundos)
+- Timbre activo
+- Fondo activo y estado de fondo dinámico
+- Atajos visibles (también en pantalla pequeña)
+- Marcador acumulado por sesión: partidas ganadas por bot + puntaje total acumulado
+
+### 🎵 Sonic Mode
+Modo instrumental infinito entre bots, orientado a experimentar con ritmo/sonido y visuales en vivo.
+
+Comparte controles con Bot vs Bot y además permite recargar presets sin reiniciar partida.
+
+**Controles especiales (Bot vs Bot + Sonic):**
+- `W/S` o `↑/↓` - Subir/bajar tempo
+- `A/D` o `←/→` - Cambiar timbre/preset
+- `Q/E` - Cambiar fondo
+- `B` - Activar/desactivar fondo dinámico
+- `G` - Activar/desactivar ghost trails
+- `N` - Activar/desactivar modo noche (transparencia + grilla)
 - `M` - Silenciar/activar sonido
-- `←/→` - Cambiar preset de sonido (diferentes instrumentos/estilos)
+- `R` - Recargar configuración sónica (solo en Sonic)
 
 ---
 
@@ -38,7 +53,9 @@ Observá cómo dos IAs juegan entre sí. Útil para:
 6 paletas para los jugadores: Classic, Ocean, Sunset, Nature, Cyber, Pastel
 
 ### Fondos
-5 gradientes de fondo: Midnight, Deep Ocean, Forest, Void, Slate
+6 gradientes de fondo: Ocean, Midnight, Forest, Sunset, Night, Void.
+
+En Bot vs Bot y Sonic se puede ciclar el fondo en vivo (`Q/E`) y activar animación dinámica (`B`).
 
 ### Sistema de Ghosts
 Cuando seleccionás una ficha, aparecen "fantasmas" en todas las posiciones válidas donde podés colocarla. Click en un ghost para confirmar la jugada.
@@ -47,14 +64,19 @@ Cuando seleccionás una ficha, aparecen "fantasmas" en todas las posiciones vál
 - **Zoom**: Rueda del mouse
 - **Pan**: Click derecho + arrastrar
 
+### Modo Terminal Retro
+Podés activar un look estilo terminal clásica (fondo negro + verde flúo) con `T`.
+
 ---
 
-## Audio
+## Audio y Modo Sónico
 
-El modo Bot vs Bot incluye un motor de sonido procedural:
+Bot vs Bot y Sonic incluyen motor de sonido procedural:
 - Sonidos al colocar fichas
-- Diferentes presets seleccionables con `←/→`
+- Tempo ajustable en vivo (`W/S` o `↑/↓`)
+- Timbres/presets seleccionables (`A/D` o `←/→`)
 - Silenciable con `M`
+- Recarga de config en caliente con `R` (solo Sonic)
 
 ---
 
@@ -111,15 +133,23 @@ pip install -r requirements.txt
 | Click derecho + arrastrar | Mover cámara |
 | Rueda del mouse | Zoom |
 | ESC | Volver al menú |
+| T | Activar/desactivar modo terminal retro |
+| Z | Fullscreen normal (UI visible) |
+| X | Fullscreen limpio (solo juego) |
 
-**Solo en Bot vs Bot:**
+**Solo en Bot vs Bot y Sonic:**
 | Input | Acción |
 |-------|--------|
+| W/S o ↑/↓ | Subir/bajar tempo |
+| A/D o ←/→ | Cambiar timbre/preset |
+| Q/E | Cambiar fondo |
+| B | Fondo dinámico ON/OFF |
 | N | Modo noche (transparencia + grilla) |
 | G | Ghost trails (rastros de partidas) |
-| ↑/↓ | Velocidad de juego |
-| ←/→ | Cambiar preset de sonido |
 | M | Silenciar |
+| R | Recargar config sónica (solo Sonic) |
+
+Nota: en fullscreen normal (`Z`) se mantiene la UI. En fullscreen limpio (`X`) se ocultan HUD y shortcuts, pero se mantiene una barra mínima con puntajes (y pool) para seguir la partida. Con `ESC` salís de fullscreen. El modo terminal (`T`) funciona en menú y partida.
 
 ---
 

@@ -7,6 +7,7 @@ import numpy as np
 import json
 import os
 from typing import List, Dict, Optional
+import math
 
 # Initialize pygame mixer
 pygame.mixer.pre_init(frequency=44100, size=-16, channels=2, buffer=512)
@@ -19,77 +20,68 @@ class SoundEngine:
         if not pygame.mixer.get_init():
             pygame.mixer.init()
         
-        # Tempo control (ms between AI moves)
-        self.tempo_ms = 800
-        self.min_tempo = 100
-        self.max_tempo = 2000
-        self.tempo_step = 100
-        
-        # Sound preset system
-        self.presets = self._load_presets()
-        self.current_preset_idx = 0
-        
         # Audio state
         self.muted = False
         self.volume = 0.7
         
         # Cache generated sounds
         self._sound_cache: Dict[str, pygame.mixer.Sound] = {}
+
+        # Load Configuration
+        self.config = {}
+        self.presets = []
+        self.events = {}
+        self.reload_config()
+
+        # State
+        self.current_preset_idx = 0
+        self.base_bpm = self.config.get("bpm", 120)
+        self.bpm_multiplier = 1.0
     
-    def _load_presets(self) -> List[Dict]:
-        """Load sound presets from JSON or use defaults."""
+    def reload_config(self):
+        """Load/Reload sound presets and config from JSON."""
+        # Try sonic_config.json first, fall back to sound_presets.json
+        sonic_path = os.path.join(os.path.dirname(__file__), "sonic_config.json")
         presets_path = os.path.join(os.path.dirname(__file__), "sound_presets.json")
         
-        if os.path.exists(presets_path):
+        data = {}
+        if os.path.exists(sonic_path):
+            with open(sonic_path, 'r') as f:
+                data = json.load(f)
+        elif os.path.exists(presets_path):
             with open(presets_path, 'r') as f:
                 data = json.load(f)
-                return data.get("presets", self._default_presets())
         
-        return self._default_presets()
-    
+        self.config = data
+        self.presets = data.get("presets", self._default_presets())
+        self.events = data.get("events", {})
+        
+        # Reset cache on reload
+        self._sound_cache.clear()
+        
+    @property
+    def tempo_ms(self) -> int:
+        """Calculate delay in ms between beats based on BPM."""
+        effective_bpm = self.base_bpm * self.bpm_multiplier
+        # 60000 ms / BPM = ms per beat
+        return int(60000 / max(1, effective_bpm))
+
     def _default_presets(self) -> List[Dict]:
         """Built-in sound presets."""
         return [
             {
                 "name": "Piano",
                 "waveform": "sine",
-                "base_freq": 261.63,  # C4
+                "base_freq": 261.63,
                 "decay": 0.5,
-                "scale": [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23, 24, 26]  # Major scale intervals
-            },
-            {
-                "name": "8-Bit",
-                "waveform": "square",
-                "base_freq": 220.0,  # A3
-                "decay": 0.3,
-                "scale": [0, 3, 5, 7, 10, 12, 15, 17, 19, 22, 24, 27, 29, 31, 34, 36]  # Minor pentatonic
-            },
-            {
-                "name": "Moog Bass",
-                "waveform": "sawtooth",
-                "base_freq": 110.0,  # A2
-                "decay": 0.4,
-                "scale": [0, 2, 3, 5, 7, 8, 10, 12, 14, 15, 17, 19, 20, 22, 24, 26]  # Natural minor
-            },
-            {
-                "name": "Synth Pad",
-                "waveform": "triangle",
-                "base_freq": 329.63,  # E4
-                "decay": 0.8,
-                "scale": [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24, 26, 28, 31, 33, 36]  # Pentatonic major
-            },
-            {
-                "name": "Bells",
-                "waveform": "sine",
-                "base_freq": 523.25,  # C5
-                "decay": 1.0,
-                "scale": [0, 4, 7, 12, 16, 19, 24, 28, 31, 36, 40, 43, 48, 52, 55, 60]  # Overtone series
+                "scale": [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23, 24, 26]
             }
         ]
     
     @property
     def current_preset(self) -> Dict:
         """Get current sound preset."""
+        if not self.presets: return self._default_presets()[0]
         return self.presets[self.current_preset_idx]
     
     @property
@@ -99,15 +91,22 @@ class SoundEngine:
     
     def next_preset(self, direction: int = 1):
         """Cycle to next/previous preset."""
+        if not self.presets: return
         self.current_preset_idx = (self.current_preset_idx + direction) % len(self.presets)
         self._sound_cache.clear()  # Clear cache on preset change
     
-    def adjust_tempo(self, faster: bool):
-        """Adjust tempo (AI move speed)."""
-        if faster:
-            self.tempo_ms = max(self.min_tempo, self.tempo_ms - self.tempo_step)
-        else:
-            self.tempo_ms = min(self.max_tempo, self.tempo_ms + self.tempo_step)
+    def adjust_bpm(self, delta: int):
+        """Adjust base BPM."""
+        self.base_bpm = max(10, min(600, self.base_bpm + delta))
+
+    def adjust_tempo(self, faster: bool = True, step: int = 10) -> int:
+        """Compatibility helper for UI callers that expect tempo +/- control."""
+        self.adjust_bpm(step if faster else -step)
+        return self.base_bpm
+
+    def set_bpm(self, bpm: int):
+        """Set specific BPM."""
+        self.base_bpm = max(10, min(600, bpm))
     
     def toggle_mute(self):
         """Toggle audio mute."""
@@ -126,46 +125,71 @@ class SoundEngine:
             wave = 2 * (t * freq - np.floor(0.5 + t * freq))
         elif waveform == "triangle":
             wave = 2 * np.abs(2 * (t * freq - np.floor(t * freq + 0.5))) - 1
+        elif waveform == "noise":
+             wave = np.random.uniform(-1, 1, t.shape)
         else:
             wave = np.sin(2 * np.pi * freq * t)  # Default sine
         
         return wave
     
-    def _apply_envelope(self, wave: np.ndarray, decay: float) -> np.ndarray:
+    def _apply_envelope(self, wave: np.ndarray, attack: float, decay: float, release: float) -> np.ndarray:
         """Apply ADSR-like envelope to wave."""
         length = len(wave)
         envelope = np.ones(length)
+        sample_rate = 44100
         
-        # Attack (5% of duration)
-        attack_len = int(length * 0.05)
-        envelope[:attack_len] = np.linspace(0, 1, attack_len)
+        attack_len = int(sample_rate * attack)
+        release_len = int(sample_rate * release)
         
-        # Decay/Sustain/Release
-        decay_start = int(length * 0.1)
-        envelope[decay_start:] = np.linspace(1, 0, length - decay_start) ** (1 / decay)
+        # Ensure lengths fit
+        total_env_len = attack_len + release_len
+        if total_env_len > length:
+             scale = length / total_env_len
+             attack_len = int(attack_len * scale)
+             release_len = int(release_len * scale)
+
+        # Attack
+        if attack_len > 0:
+            envelope[:attack_len] = np.linspace(0, 1, attack_len)
         
+        # Decay/Sustain part (simplified: just constant 1 for now or exp decay)
+        # Using decay param as exponential decay factor for the body
+        sustain_len = length - attack_len - release_len
+        if sustain_len > 0:
+            decay_curve = np.linspace(1, 0.5, sustain_len) ** (1/decay) if decay > 0 else np.ones(sustain_len)
+            envelope[attack_len:attack_len+sustain_len] = decay_curve
+
+        # Release
+        if release_len > 0:
+            start_val = envelope[length-release_len-1] if length-release_len-1 >= 0 else 1.0
+            envelope[-release_len:] = np.linspace(start_val, 0, release_len)
+            
         return wave * envelope
     
     def _create_sound(self, tile_sum: int) -> pygame.mixer.Sound:
         """Create a sound based on tile value sum."""
         preset = self.current_preset
         
-        # Map tile sum (0-15) to scale degree
+        # Map tile sum (0-15 typical) to scale degree
         scale = preset.get("scale", list(range(16)))
-        semitones = scale[min(tile_sum, len(scale) - 1)]
+        scale_idx = tile_sum % len(scale)
+        semitones = scale[scale_idx]
         
         # Calculate frequency from base + semitones
         base_freq = preset.get("base_freq", 261.63)
         freq = base_freq * (2 ** (semitones / 12))
         
         # Generate waveform
-        duration = 0.4
+        duration = 0.4 # Fixed buffer length for now
         waveform = preset.get("waveform", "sine")
         wave = self._generate_waveform(freq, duration, waveform)
         
         # Apply envelope
         decay = preset.get("decay", 0.5)
-        wave = self._apply_envelope(wave, decay)
+        attack = preset.get("attack", 0.05)
+        release = preset.get("release", 0.1)
+        
+        wave = self._apply_envelope(wave, attack, decay, release)
         
         # Normalize and convert to 16-bit stereo
         wave = (wave * 32767 * self.volume).astype(np.int16)
@@ -173,6 +197,22 @@ class SoundEngine:
         
         return pygame.sndarray.make_sound(stereo)
     
+    def play_event(self, event_name: str, **kwargs):
+        """Play a specific game event sound."""
+        if self.muted: return
+        
+        # Check if event is mapped in config
+        action = self.events.get(event_name)
+        if not action: return 
+        
+        if event_name == "on_place":
+             tile_values = kwargs.get("tile_values", (0,0,0))
+             self.play_tile_sound(tile_values)
+        elif event_name == "on_draw":
+             pass # Placeholder implementation
+        elif event_name == "on_pass":
+             pass # Placeholder implementation
+
     def play_tile_sound(self, tile_values: tuple):
         """Play sound for a placed tile based on its values."""
         if self.muted:
@@ -189,7 +229,7 @@ class SoundEngine:
     def get_status_text(self) -> str:
         """Get formatted status string for HUD."""
         mute_str = "🔇" if self.muted else "🔊"
-        return f"{mute_str} {self.preset_name} | Tempo: {self.tempo_ms}ms"
+        return f"{mute_str} {self.preset_name} | BPM: {self.base_bpm}"
 
 
 # Singleton instance
